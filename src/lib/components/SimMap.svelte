@@ -218,7 +218,8 @@
       layers: [],
       getCursor: ({ isDragging }) => isDragging ? 'grabbing' : 'crosshair',
       onViewStateChange: ({ viewState }) => {
-        currentZoom = (viewState as OrthographicViewState).zoom ?? currentZoom
+        const z = (viewState as OrthographicViewState).zoom
+        if (typeof z === 'number') currentZoom = z
       },
     })
   })
