@@ -188,9 +188,6 @@
 
 <style>
   .ctrl-panel {
-    position: absolute;
-    top: 12px;
-    left: 12px;
     width: 240px;
     background: rgba(13, 20, 30, 0.92);
     border: 1px solid rgba(0, 200, 255, 0.2);

@@ -52,6 +52,8 @@ export const kernelConfig = writable<Record<string, string>>({})
 export const focusPoint = writable<{ x: number; y: number } | null>(null)
 /** agentId → AgentAction (current timestep only) */
 export const agentActions = writable<Map<number, AgentAction>>(new Map())
+/** 初期ステップの瓦礫 repairCost 合計（除去率計算用） */
+export const initialBlockadeCost = writable(0)
 
 export const selectedEntity = derived(
   [entities, selectedId],
@@ -91,9 +93,17 @@ export function connectWS(url: string) {
         maxStep.set(msg.maxStep);
         kernelConfig.set(msg.config ?? {});
       } else if (msg.type === "TIMESTEP") {
-        entities.update((map) =>
-          applyChanges(map, msg.changes as ChangeSetProto),
-        );
+        entities.update((map) => {
+          const next = applyChanges(map, msg.changes as ChangeSetProto);
+          if (msg.time === 1) {
+            let totalCost = 0;
+            for (const e of next.values()) {
+              if ('repairCost' in e) totalCost += (e as { repairCost: number }).repairCost;
+            }
+            initialBlockadeCost.set(totalCost);
+          }
+          return next;
+        });
         currentStep.set(msg.time);
         if (Array.isArray(msg.commands)) {
           const actions = new Map<number, AgentAction>();
@@ -179,6 +189,18 @@ export async function loadFile(file: File) {
     for (const { key } of collectStepFiles("/COMMANDS")) {
       handleLogFrame(LogProtoCodec.decode(files.get(key)!));
     }
+
+    // ステップ1のスナップショットから瓦礫の初期 repairCost 合計を計算
+    const step1 = new Map<number, SimEntity>(
+      Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }])
+    );
+    const step1changes = timeline.get(1);
+    if (step1changes) applyChanges(step1, step1changes);
+    let totalCost = 0;
+    for (const e of step1.values()) {
+      if ('repairCost' in e) totalCost += (e as { repairCost: number }).repairCost;
+    }
+    initialBlockadeCost.set(totalCost);
 
     currentStep.set(0);
     rebuildState(0);
@@ -275,6 +297,7 @@ function reset() {
   currentStep.set(0);
   maxStep.set(0);
   selectedId.set(null);
+  initialBlockadeCost.set(0);
   kernelConfig.set({});
   agentActions.set(new Map());
 }
