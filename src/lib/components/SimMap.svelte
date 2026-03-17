@@ -33,8 +33,8 @@
     const base = FACILITY_COLOR[e.urn]
     if (base) return [...base, 240] as [number, number, number, number]
 
-    // Regular building: darken with brokenness
-    return e.brokenness > 50 ? [180, 120, 60, 220] : [80, 100, 140, 220]
+    // Regular building: brokenness が 1 以上で茶色
+    return e.brokenness > 0 ? [180, 120, 60, 220] : [80, 100, 140, 220]
   }
 
   function agentColor(urn: number, action?: AgentAction, carrying = false): [number, number, number, number] {

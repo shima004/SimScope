@@ -244,6 +244,7 @@
   }
 
   .bar-wrap {
+    display: inline-block;
     width: 60px;
     height: 4px;
     background: rgba(255,255,255,0.1);
@@ -251,6 +252,7 @@
     overflow: hidden;
   }
   .bar {
+    display: block;
     height: 100%;
     background: #c84040;
     border-radius: 2px;
