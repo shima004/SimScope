@@ -15,6 +15,20 @@
     return { pct, total: $initialBlockadeCost }
   })
 
+  const refugeResult = $derived.by(() => {
+    let injured = 0
+    let inRefuge = 0
+    for (const e of $entities.values()) {
+      if (e.urn !== EntityURN.CIVILIAN) continue
+      const c = e as { hp: number; position: number }
+      if (!('hp' in e) || c.hp >= MAX_HP) continue
+      injured++
+      const pos = $entities.get(c.position)
+      if (pos?.urn === EntityURN.REFUGE) inRefuge++
+    }
+    return { inRefuge, injured }
+  })
+
   const result = $derived.by(() => {
     let civilians = 0
     let total = 0
@@ -42,6 +56,12 @@
       <div class="row">
         <span class="label">Score</span>
         <span class="value">{result.score.toFixed(2)}<span class="max"> / {result.maxScore}</span></span>
+      </div>
+    {/if}
+    {#if refugeResult !== null && result !== null}
+      <div class="row">
+        <span class="label">Injured in Refuge</span>
+        <span class="value">{refugeResult.inRefuge}<span class="max"> / {refugeResult.injured}</span></span>
       </div>
     {/if}
     {#if blockadeResult !== null}
