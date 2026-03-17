@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { Deck, OrthographicView } from '@deck.gl/core'
   import type { PickingInfo, OrthographicViewState } from '@deck.gl/core'
-  import { PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
+  import { PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
   import { entities, selectedId } from '$lib/stores/simulation'
   import { EntityURN, isBuilding, isAgent } from '$lib/rcrs/urns'
   import type { SimEntity, BuildingEntity, RoadEntity, BlockadeEntity, HumanEntity } from '$lib/rcrs/types'
@@ -114,6 +114,27 @@
         onClick: (info: PickingInfo) => selectedId.set((info.object as HumanEntity)?.id ?? null),
         updateTriggers: { getRadius: [selId] },
       }),
+
+      // POSITION_HISTORY のエンティティ ID → X,Y でパスを構築
+      new PathLayer({
+        id: 'agent-trails',
+        data: agents.filter(a => a.positionHistory.length >= 2),
+        getPath: (d: HumanEntity) => {
+          const pts: [number, number][] = []
+          for (let i = 0; i + 1 < d.positionHistory.length; i += 2) {
+            pts.push([d.positionHistory[i], d.positionHistory[i + 1]])
+          }
+          return pts
+        },
+        getColor: (d: HumanEntity) => {
+          const [r, g, b] = agentColor(d.urn)
+          return [r, g, b, d.id === selId ? 220 : 60] as [number, number, number, number]
+        },
+        getWidth: (d: HumanEntity) => d.id === selId ? 400 : 200,
+        widthMinPixels: 1,
+        widthMaxPixels: 4,
+        updateTriggers: { getColor: [selId], getWidth: [selId] },
+      }),
     ]
   }
 
@@ -146,6 +167,26 @@
     deck.setProps({ initialViewState: viewState })
   }
 
+  // ── Follow mode ───────────────────────────────────────────────────────────
+
+  let followMode = $state(false)
+  let currentZoom = 0
+
+  function followAgent(emap: Map<number, SimEntity>, selId: number | null) {
+    if (!followMode || selId === null || !deck) return
+    const e = emap.get(selId)
+    if (!e || !isAgent(e.urn)) return
+    const h = e as HumanEntity
+    deck.setProps({
+      initialViewState: {
+        target: [h.x, h.y, 0] as [number, number, number],
+        zoom: currentZoom,
+        minZoom: currentZoom - 5,
+        maxZoom: currentZoom + 10,
+      },
+    })
+  }
+
   // ── Store subscriptions ───────────────────────────────────────────────────
 
   let prevSize = 0
@@ -156,11 +197,13 @@
     deck.setProps({ layers: buildLayers(emap, selId) })
     if (prevSize === 0 && emap.size > 0) fitViewport(emap)
     prevSize = emap.size
+    followAgent(emap, selId)
   })
 
   const unsubSel = selectedId.subscribe((selId) => {
     if (!deck) return
     deck.setProps({ layers: buildLayers($entities, selId) })
+    followAgent($entities, selId)
   })
 
   // ── Deck.gl lifecycle ─────────────────────────────────────────────────────
@@ -174,6 +217,9 @@
       controller: true,
       layers: [],
       getCursor: ({ isDragging }) => isDragging ? 'grabbing' : 'crosshair',
+      onViewStateChange: ({ viewState }) => {
+        currentZoom = (viewState as OrthographicViewState).zoom ?? currentZoom
+      },
     })
   })
 
@@ -186,11 +232,41 @@
 
 <canvas bind:this={canvas} class="sim-canvas"></canvas>
 
+<button
+  class="follow-btn"
+  class:active={followMode}
+  onclick={() => followMode = !followMode}
+  title="選択中のエージェントに追従"
+>
+  {followMode ? '⊙ Follow ON' : '⊙ Follow'}
+</button>
+
 <style>
   .sim-canvas {
     width: 100%;
     height: 100%;
     display: block;
     background: #0d1117;
+  }
+
+  .follow-btn {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    background: rgba(13, 20, 30, 0.88);
+    border: 1px solid rgba(0, 200, 255, 0.2);
+    border-radius: 4px;
+    color: #607080;
+    font-size: 12px;
+    padding: 5px 10px;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    z-index: 10;
+  }
+  .follow-btn:hover { border-color: rgba(0, 200, 255, 0.4); color: #a8c8d8; }
+  .follow-btn.active {
+    border-color: rgba(0, 200, 255, 0.6);
+    color: #00c8ff;
+    background: rgba(0, 180, 255, 0.12);
   }
 </style>
