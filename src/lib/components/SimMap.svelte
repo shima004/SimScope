@@ -37,18 +37,21 @@
     return e.brokenness > 0 ? [180, 120, 60, 220] : [80, 100, 140, 220]
   }
 
-  function agentColor(urn: number, action?: AgentAction, carrying = false): [number, number, number, number] {
+  function agentColor(urn: number, action?: AgentAction, carrying = false, hp = 10000): [number, number, number, number] {
     if (urn === EntityURN.FIRE_BRIGADE && action?.urn === CommandURN.AK_RESCUE) {
       return [255, 140, 0,   255]  // rescue中: オレンジ
     }
     if (urn === EntityURN.AMBULANCE_TEAM && carrying) {
       return [255, 200, 60,  255]  // 市民搬送中: 黄色
     }
+    if (urn === EntityURN.CIVILIAN) {
+      const t = Math.max(0, Math.min(1, hp / 10000))
+      return [Math.round(60 * t), Math.round(200 * t), Math.round(80 * t), 255]
+    }
     switch (urn) {
       case EntityURN.FIRE_BRIGADE:   return [220, 30,  30,  255]  // 赤
       case EntityURN.AMBULANCE_TEAM: return [240, 240, 240, 255]  // 白
       case EntityURN.POLICE_FORCE:   return [60,  140, 255, 255]
-      case EntityURN.CIVILIAN:       return [60,  200, 80,  255]  // 緑
       default:                       return [200, 200, 200, 255]
     }
   }
@@ -171,7 +174,7 @@
         id: 'agents',
         data: visibleAgents,
         getPosition: (d: HumanEntity) => [d.x, d.y],
-        getFillColor: (d: HumanEntity) => agentColor(d.urn, actions.get(d.id), carrierMap.has(d.id)),
+        getFillColor: (d: HumanEntity) => agentColor(d.urn, actions.get(d.id), carrierMap.has(d.id), d.hp),
         getRadius: (d: HumanEntity) => d.id === selId ? 800 : 500,
         radiusMinPixels: 3,
         radiusMaxPixels: 12,
@@ -208,7 +211,7 @@
           return pts
         },
         getColor: (d: HumanEntity) => {
-          const [r, g, b] = agentColor(d.urn, actions.get(d.id), carrierMap.has(d.id))
+          const [r, g, b] = agentColor(d.urn, actions.get(d.id), carrierMap.has(d.id), d.hp)
           return [r, g, b, d.id === selId ? 220 : 60] as [number, number, number, number]
         },
         getWidth: (d: HumanEntity) => d.id === selId ? 400 : 200,
