@@ -48,6 +48,8 @@ export const currentStep = writable(0);
 export const maxStep = writable(0);
 export const selectedId   = writable<number | null>(null)
 export const kernelConfig = writable<Record<string, string>>({})
+/** マップを指定座標にズームさせるトリガー。セット後 SimMap が null にリセット */
+export const focusPoint = writable<{ x: number; y: number } | null>(null)
 /** agentId → AgentAction (current timestep only) */
 export const agentActions = writable<Map<number, AgentAction>>(new Map())
 

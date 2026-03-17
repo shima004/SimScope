@@ -2,7 +2,7 @@
   import type { BlockadeEntity, BuildingEntity, HumanEntity, RoadEntity, SimEntity } from '$lib/rcrs/types';
   import { CommandURN, EntityURN, isAgent, isBuilding } from '$lib/rcrs/urns';
   import type { AgentAction } from '$lib/stores/simulation';
-  import { agentActions, entities, kernelConfig, selectedId } from '$lib/stores/simulation';
+  import { agentActions, entities, focusPoint, kernelConfig, selectedId } from '$lib/stores/simulation';
   import type { OrthographicViewState, PickingInfo } from '@deck.gl/core';
   import { Deck, OrthographicView } from '@deck.gl/core';
   import { PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
@@ -255,6 +255,7 @@
     const viewSize = Math.min(canvas.clientWidth, canvas.clientHeight)
     const zoom = Math.log2(viewSize / span) - 0.2
 
+    fitZoom = zoom
     const target: [number, number, number] = [cx, cy, 0]
     const viewState: OrthographicViewState = { target, zoom, minZoom: zoom - 5, maxZoom: zoom + 10 }
     deck.setProps({ initialViewState: viewState })
@@ -264,6 +265,7 @@
 
   let followMode = $state(false)
   let currentZoom = 0
+  let fitZoom = 0
 
   function followAgent(emap: Map<number, SimEntity>, selId: number | null) {
     if (!followMode || selId === null || !deck) return
@@ -304,6 +306,20 @@
     deck.setProps({ layers: buildLayers($entities, $selectedId, actions, $kernelConfig) })
   })
 
+  const unsubFocus = focusPoint.subscribe((pt) => {
+    if (!pt || !deck) return
+    const closeZoom = Math.max(currentZoom, fitZoom + 5)
+    deck.setProps({
+      initialViewState: {
+        target: [pt.x, pt.y, 0] as [number, number, number],
+        zoom: closeZoom,
+        minZoom: fitZoom - 5,
+        maxZoom: fitZoom + 10,
+      },
+    })
+    focusPoint.set(null)
+  })
+
   // ── Deck.gl lifecycle ─────────────────────────────────────────────────────
 
   onMount(() => {
@@ -326,6 +342,7 @@
     unsubEntities()
     unsubSel()
     unsubActions()
+    unsubFocus()
     deck?.finalize()
   })
 </script>
