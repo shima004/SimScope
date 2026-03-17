@@ -164,7 +164,15 @@ export function handleRcrsViewer(ws, tcpHost, tcpPort) {
         const cmdList = MessageListProtoType.toObject(commandListMsg, TOOBJ_OPTS);
         for (const cmd of (cmdList.commands ?? [])) {
           const agentId = cmd.components?.[URN.AgentID]?.entityID ?? 0;
-          if (agentId) commands.push({ urn: cmd.urn, agentId });
+          if (!agentId) continue;
+          const entry = { urn: cmd.urn, agentId };
+          const target = cmd.components?.[0x1401]?.entityID;
+          const destX  = cmd.components?.[0x1402]?.intValue;
+          const destY  = cmd.components?.[0x1403]?.intValue;
+          if (target !== undefined) entry.target = target;
+          if (destX  !== undefined) entry.destX  = destX;
+          if (destY  !== undefined) entry.destY  = destY;
+          commands.push(entry);
         }
       }
 

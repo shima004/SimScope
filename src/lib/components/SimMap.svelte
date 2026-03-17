@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
-  import { Deck, OrthographicView } from '@deck.gl/core'
-  import type { PickingInfo, OrthographicViewState } from '@deck.gl/core'
-  import { PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
-  import { entities, selectedId, agentActions } from '$lib/stores/simulation'
-  import { CommandURN, EntityURN, isBuilding, isAgent } from '$lib/rcrs/urns'
-  import type { SimEntity, BuildingEntity, RoadEntity, BlockadeEntity, HumanEntity } from '$lib/rcrs/types'
+  import type { BlockadeEntity, BuildingEntity, HumanEntity, RoadEntity, SimEntity } from '$lib/rcrs/types';
+  import { CommandURN, EntityURN, isAgent, isBuilding } from '$lib/rcrs/urns';
+  import type { AgentAction } from '$lib/stores/simulation';
+  import { agentActions, entities, kernelConfig, selectedId } from '$lib/stores/simulation';
+  import type { OrthographicViewState, PickingInfo } from '@deck.gl/core';
+  import { Deck, OrthographicView } from '@deck.gl/core';
+  import { PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
+  import { onDestroy, onMount } from 'svelte';
 
   let canvas: HTMLCanvasElement
   let deck: Deck<OrthographicView> | null = null
@@ -36,8 +37,8 @@
     return e.brokenness > 50 ? [180, 120, 60, 220] : [80, 100, 140, 220]
   }
 
-  function agentColor(urn: number, action?: number, carrying = false): [number, number, number, number] {
-    if (urn === EntityURN.FIRE_BRIGADE && action === CommandURN.AK_RESCUE) {
+  function agentColor(urn: number, action?: AgentAction, carrying = false): [number, number, number, number] {
+    if (urn === EntityURN.FIRE_BRIGADE && action?.urn === CommandURN.AK_RESCUE) {
       return [255, 140, 0,   255]  // rescue中: オレンジ
     }
     if (urn === EntityURN.AMBULANCE_TEAM && carrying) {
@@ -54,7 +55,12 @@
 
   // ── Layer builders ────────────────────────────────────────────────────────
 
-  function buildLayers(emap: Map<number, SimEntity>, selId: number | null, actions: Map<number, number>) {
+  function buildLayers(
+    emap: Map<number, SimEntity>,
+    selId: number | null,
+    actions: Map<number, AgentAction>,
+    cfg: Record<string, string>,
+  ) {
     const roads:     RoadEntity[]     = []
     const buildings: BuildingEntity[] = []
     const blockades: BlockadeEntity[] = []
@@ -67,12 +73,53 @@
       else if (isAgent(e.urn))               agents.push(e as HumanEntity)
     }
 
-    // 市民の position が救急隊の ID になっていれば「搬送中」
-    const carryingAmbulances = new Set<number>()
+    // 搬送中マップ: ambulanceId → civilian
+    const carrierMap = new Map<number, HumanEntity>()
+    const carriedIds = new Set<number>()
     for (const e of emap.values()) {
       if (e.urn === EntityURN.CIVILIAN) {
-        const carrier = emap.get((e as HumanEntity).position)
-        if (carrier?.urn === EntityURN.AMBULANCE_TEAM) carryingAmbulances.add(carrier.id)
+        const h = e as HumanEntity
+        const carrier = emap.get(h.position)
+        if (carrier?.urn === EntityURN.AMBULANCE_TEAM) {
+          carrierMap.set(carrier.id, h)
+          carriedIds.add(h.id)
+        }
+      }
+    }
+
+    // 搬送中の市民はメインリストから除外
+    const visibleAgents = agents.filter(a => !carriedIds.has(a.id))
+
+    // AK_CLEAR: ハイライト対象のブロッケード ID
+    const clearingTargets = new Set<number>()
+    // AK_CLEAR_AREA: 矩形ポリゴン
+    const clearDist = parseInt(cfg['clear.repair.distance'] ?? '10000', 10)
+    const clearRad  = parseInt(cfg['clear.repair.rad']      ?? '2000',  10)
+    const clearAreaPolygons: [number, number][][] = []
+
+    for (const [agentId, action] of actions) {
+      if (action.urn === CommandURN.AK_CLEAR && action.target !== undefined) {
+        clearingTargets.add(action.target)
+      } else if (action.urn === CommandURN.AK_CLEAR_AREA &&
+                 action.destX !== undefined && action.destY !== undefined) {
+        const agent = emap.get(agentId) as HumanEntity | undefined
+        if (!agent) continue
+        const dx = action.destX - agent.x
+        const dy = action.destY - agent.y
+        const len = Math.sqrt(dx * dx + dy * dy)
+        if (len === 0) continue
+        // 進行方向の単位ベクトルと直角ベクトル
+        const nx = dx / len,  ny = dy / len   // 進行方向
+        const px = -ny,       py = nx          // 直角（左）
+        // 矩形の4頂点: 起点=エージェント、終点=進行方向にclearDist
+        const ex = agent.x + nx * clearDist
+        const ey = agent.y + ny * clearDist
+        clearAreaPolygons.push([
+          [agent.x + px * clearRad, agent.y + py * clearRad],
+          [agent.x - px * clearRad, agent.y - py * clearRad],
+          [ex     - px * clearRad, ey     - py * clearRad],
+          [ex     + px * clearRad, ey     + py * clearRad],
+        ])
       }
     }
 
@@ -110,18 +157,21 @@
         getPolygon: (d: BlockadeEntity) => d.apexes,
         getFillColor: [200, 160, 40, 200],
         getLineColor: (d: BlockadeEntity) =>
-          d.id === selId ? [0, 220, 255, 255] : [240, 200, 60, 255],
+          d.id === selId          ? [0,   220, 255, 255] :
+          clearingTargets.has(d.id) ? [255, 80,  200, 255] :  // クリア対象: マゼンタ
+                                    [240, 200, 60,  255],
         lineWidthMinPixels: 1,
+        lineWidthMaxPixels: 4,
         pickable: true,
         onClick: (info: PickingInfo) => selectedId.set((info.object as BlockadeEntity)?.id ?? null),
-        updateTriggers: { getLineColor: [selId] },
+        updateTriggers: { getLineColor: [selId, clearingTargets] },
       }),
 
       new ScatterplotLayer({
         id: 'agents',
-        data: agents,
+        data: visibleAgents,
         getPosition: (d: HumanEntity) => [d.x, d.y],
-        getFillColor: (d: HumanEntity) => agentColor(d.urn, actions.get(d.id), carryingAmbulances.has(d.id)),
+        getFillColor: (d: HumanEntity) => agentColor(d.urn, actions.get(d.id), carrierMap.has(d.id)),
         getRadius: (d: HumanEntity) => d.id === selId ? 800 : 500,
         radiusMinPixels: 3,
         radiusMaxPixels: 12,
@@ -130,10 +180,26 @@
         updateTriggers: { getRadius: [selId], getFillColor: [actions] },
       }),
 
+      // 搬送中の市民インジケータ（救急隊の上に重ねる小さな緑ドット）
+      new ScatterplotLayer({
+        id: 'passengers',
+        data: visibleAgents.filter(a => carrierMap.has(a.id)),
+        getPosition: (d: HumanEntity) => [d.x, d.y],
+        getFillColor: [60, 200, 80, 220],
+        getLineColor: [255, 255, 255, 180],
+        getRadius: (d: HumanEntity) => d.id === selId ? 400 : 250,
+        radiusMinPixels: 2,
+        radiusMaxPixels: 7,
+        stroked: true,
+        lineWidthMinPixels: 1,
+        pickable: false,
+        updateTriggers: { getRadius: [selId] },
+      }),
+
       // POSITION_HISTORY のエンティティ ID → X,Y でパスを構築
       new PathLayer({
         id: 'agent-trails',
-        data: agents.filter(a => a.positionHistory.length >= 2),
+        data: visibleAgents.filter(a => a.positionHistory.length >= 2),
         getPath: (d: HumanEntity) => {
           const pts: [number, number][] = []
           for (let i = 0; i + 1 < d.positionHistory.length; i += 2) {
@@ -142,13 +208,25 @@
           return pts
         },
         getColor: (d: HumanEntity) => {
-          const [r, g, b] = agentColor(d.urn, actions.get(d.id), carryingAmbulances.has(d.id))
+          const [r, g, b] = agentColor(d.urn, actions.get(d.id), carrierMap.has(d.id))
           return [r, g, b, d.id === selId ? 220 : 60] as [number, number, number, number]
         },
         getWidth: (d: HumanEntity) => d.id === selId ? 400 : 200,
         widthMinPixels: 1,
         widthMaxPixels: 4,
         updateTriggers: { getColor: [selId], getWidth: [selId] },
+      }),
+
+      // AK_CLEAR_AREA: 矩形範囲
+      new PolygonLayer({
+        id: 'clear-area',
+        data: clearAreaPolygons,
+        getPolygon: (d: [number, number][]) => d,
+        getFillColor: [255, 80, 200, 30],
+        getLineColor: [255, 80, 200, 220],
+        lineWidthMinPixels: 1,
+        lineWidthMaxPixels: 3,
+        pickable: false,
       }),
     ]
   }
@@ -209,7 +287,7 @@
   const unsubEntities = entities.subscribe((emap) => {
     if (!deck) return
     const selId = $selectedId
-    deck.setProps({ layers: buildLayers(emap, selId, $agentActions) })
+    deck.setProps({ layers: buildLayers(emap, selId, $agentActions, $kernelConfig) })
     if (prevSize === 0 && emap.size > 0) fitViewport(emap)
     prevSize = emap.size
     followAgent(emap, selId)
@@ -217,13 +295,13 @@
 
   const unsubSel = selectedId.subscribe((selId) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, selId, $agentActions) })
+    deck.setProps({ layers: buildLayers($entities, selId, $agentActions, $kernelConfig) })
     followAgent($entities, selId)
   })
 
   const unsubActions = agentActions.subscribe((actions) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, $selectedId, actions) })
+    deck.setProps({ layers: buildLayers($entities, $selectedId, actions, $kernelConfig) })
   })
 
   // ── Deck.gl lifecycle ─────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { LogProto as LogProtoCodec } from "$lib/proto/RCRSLogProto";
 import type { ChangeSetProto, EntityProto } from "$lib/proto/RCRSProto";
 import { applyChanges, decodeEntity } from "$lib/rcrs/decoder";
 import type { SimEntity } from "$lib/rcrs/types";
-import { ComponentControlMsgURN } from "$lib/rcrs/urns";
+import { ComponentCommandURN, ComponentControlMsgURN } from "$lib/rcrs/urns";
 import { extract7zAllFiles } from "$lib/sevenzip";
 import { derived, get, writable } from "svelte/store";
 
@@ -32,17 +32,24 @@ let timeline: Map<number, ChangeSetProto> = new Map();
 
 /**
  * Per-timestep agent commands — only populated in file mode.
- * Maps step → (agentId → commandUrn)
+ * Maps step → (agentId → AgentAction)
  */
-let commandTimeline: Map<number, Map<number, number>> = new Map();
+let commandTimeline: Map<number, Map<number, AgentAction>> = new Map();
+
+export interface AgentAction {
+  urn:     number
+  target?: number   // AK_CLEAR: 対象ブロッケード entity ID
+  destX?:  number   // AK_CLEAR_AREA: 中心 X
+  destY?:  number   // AK_CLEAR_AREA: 中心 Y
+}
 
 export const entities = writable<Map<number, SimEntity>>(new Map());
 export const currentStep = writable(0);
 export const maxStep = writable(0);
 export const selectedId   = writable<number | null>(null)
 export const kernelConfig = writable<Record<string, string>>({})
-/** agentId → command URN (current timestep only) */
-export const agentActions = writable<Map<number, number>>(new Map())
+/** agentId → AgentAction (current timestep only) */
+export const agentActions = writable<Map<number, AgentAction>>(new Map())
 
 export const selectedEntity = derived(
   [entities, selectedId],
@@ -87,9 +94,13 @@ export function connectWS(url: string) {
         );
         currentStep.set(msg.time);
         if (Array.isArray(msg.commands)) {
-          const actions = new Map<number, number>();
-          for (const { agentId, urn } of msg.commands as { agentId: number; urn: number }[]) {
-            actions.set(agentId, urn);
+          const actions = new Map<number, AgentAction>();
+          for (const c of msg.commands as { agentId: number; urn: number; target?: number; destX?: number; destY?: number }[]) {
+            const action: AgentAction = { urn: c.urn };
+            if (c.target !== undefined) action.target = c.target;
+            if (c.destX  !== undefined) action.destX  = c.destX;
+            if (c.destY  !== undefined) action.destY  = c.destY;
+            actions.set(c.agentId, action);
           }
           agentActions.set(actions);
         }
@@ -218,10 +229,18 @@ function handleLogFrame(frame: LogProtoMsg) {
 
   if (frame.command) {
     const { time, commands: cmds } = frame.command;
-    const actionMap = new Map<number, number>();
+    const actionMap = new Map<number, AgentAction>();
     for (const cmd of cmds) {
       const agentId = cmd.components[ComponentControlMsgURN.AgentID]?.entityID;
-      if (agentId !== undefined) actionMap.set(agentId, cmd.urn);
+      if (agentId === undefined) continue;
+      const action: AgentAction = { urn: cmd.urn };
+      const target = cmd.components[ComponentCommandURN.Target]?.entityID;
+      const destX  = cmd.components[ComponentCommandURN.DestinationX]?.intValue;
+      const destY  = cmd.components[ComponentCommandURN.DestinationY]?.intValue;
+      if (target !== undefined) action.target = target;
+      if (destX  !== undefined) action.destX  = destX;
+      if (destY  !== undefined) action.destY  = destY;
+      actionMap.set(agentId, action);
     }
     commandTimeline.set(time, actionMap);
   }
