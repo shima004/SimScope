@@ -118,6 +118,11 @@ export async function loadFile(file: File) {
     const files = await extract7zAllFiles(raw);
 
     // INITIAL_CONDITIONS may be at top level or inside a subdirectory (e.g. rescue.log/)
+    const configKey = Array.from(files.keys()).find((k) => k.endsWith("CONFIG"));
+    if (configKey) {
+      handleLogFrame(LogProtoCodec.decode(files.get(configKey)!));
+    }
+
     const initialKey = Array.from(files.keys()).find((k) =>
       k.endsWith("INITIAL_CONDITIONS"),
     );
