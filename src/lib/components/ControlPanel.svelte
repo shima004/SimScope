@@ -1,12 +1,28 @@
 <script lang="ts">
   import {
-    mode, connected, loading, errorMsg,
-    currentStep, maxStep,
-    connectWS, disconnectWS, loadFile, seekToStep,
-  } from '$lib/stores/simulation'
+    connected,
+    connectWS,
+    currentStep,
+    disconnectWS,
+    errorMsg,
+    kernelConfig,
+    loadFile,
+    loading,
+    maxStep,
+    mode,
+    seekToStep,
+  } from '$lib/stores/simulation';
 
-  let wsUrl = $state('ws://localhost:7000')
+  // /proxy?host=<tcp-host>&port=<tcp-port> → Vite の tcpWsProxyPlugin が中継
+  let tcpHost = $state('localhost')
+  let tcpPort = $state('27931')
+  const wsUrl = $derived(
+    `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost:5173'}/proxy?host=${tcpHost}&port=${tcpPort}`
+  )
   let fileInput: HTMLInputElement
+  let playing = $state(false)
+  let playInterval: ReturnType<typeof setInterval> | null = null
+  let showConfig = $state(false)
 
   function handleConnect() {
     connectWS(wsUrl)
@@ -20,21 +36,63 @@
   function handleSeek(e: Event) {
     seekToStep(Number((e.target as HTMLInputElement).value))
   }
+
+  function stepBack() {
+    seekToStep(Math.max(0, $currentStep - 1))
+  }
+
+  function stepForward() {
+    seekToStep(Math.min($maxStep, $currentStep + 1))
+  }
+
+  function togglePlay() {
+    if (playing) {
+      clearInterval(playInterval!)
+      playInterval = null
+      playing = false
+    } else {
+      playing = true
+      playInterval = setInterval(() => {
+        if ($currentStep >= $maxStep) {
+          clearInterval(playInterval!)
+          playInterval = null
+          playing = false
+          return
+        }
+        seekToStep($currentStep + 1)
+      }, 200)
+    }
+  }
+
+  $effect(() => {
+    // モードが変わったら自動再生を停止
+    if ($mode !== 'file') {
+      clearInterval(playInterval!)
+      playInterval = null
+      playing = false
+    }
+  })
 </script>
 
 <div class="ctrl-panel">
   <!-- WebSocket section -->
   <section>
-    <span class="section-label">WebSocket</span>
+    <span class="section-label">TCP Server</span>
     <div class="row">
       <input
         class="url-input"
-        bind:value={wsUrl}
-        placeholder="ws://host:port"
+        bind:value={tcpHost}
+        placeholder="host"
+        disabled={$mode === 'ws'}
+      />
+      <input
+        class="port-input"
+        bind:value={tcpPort}
+        placeholder="port"
         disabled={$mode === 'ws'}
       />
       {#if $mode === 'ws'}
-        <button class="btn danger" onclick={disconnectWS}>Disconnect</button>
+        <button class="btn danger" onclick={disconnectWS}>Cut</button>
       {:else}
         <button class="btn primary" onclick={handleConnect} disabled={$loading}>Connect</button>
       {/if}
@@ -87,6 +145,13 @@
         value={$currentStep}
         oninput={handleSeek}
       />
+      <div class="playback-row">
+        <button class="btn icon" onclick={stepBack}     disabled={$currentStep <= 0}        aria-label="1ステップ戻る">⏮</button>
+        <button class="btn icon play" onclick={togglePlay} aria-label={playing ? '一時停止' : '自動再生'}>
+          {playing ? '⏸' : '▶'}
+        </button>
+        <button class="btn icon" onclick={stepForward} disabled={$currentStep >= $maxStep} aria-label="1ステップ進む">⏭</button>
+      </div>
     </section>
   {/if}
 
@@ -94,7 +159,32 @@
   {#if $mode === 'ws' && $currentStep > 0}
     <div class="live-step">Step {$currentStep}</div>
   {/if}
+
+  <!-- Kernel config button (WS mode) -->
+  {#if Object.keys($kernelConfig).length > 0}
+    <button class="btn primary" onclick={() => showConfig = true}>Kernel Config</button>
+  {/if}
 </div>
+
+<!-- Kernel config overlay -->
+{#if showConfig}
+  <div class="overlay-backdrop" onclick={() => showConfig = false}>
+    <div class="overlay-panel" onclick={(e) => e.stopPropagation()}>
+      <div class="overlay-header">
+        <span class="section-label">Kernel Config</span>
+        <button class="close-btn" onclick={() => showConfig = false}>✕</button>
+      </div>
+      <div class="config-table">
+        {#each Object.entries($kernelConfig).sort() as [k, v]}
+          <div class="config-row">
+            <span class="config-key" title={k}>{k}</span>
+            <span class="config-val">{v}</span>
+          </div>
+        {/each}
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .ctrl-panel {
@@ -143,6 +233,17 @@
     min-width: 0;
   }
   .url-input:disabled { opacity: 0.5; }
+
+  .port-input {
+    width: 52px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
+    color: #c8d8e8;
+    font-size: 12px;
+    padding: 5px 6px;
+  }
+  .port-input:disabled { opacity: 0.5; }
 
   .btn {
     border: none;
@@ -212,10 +313,106 @@
     accent-color: #00c8ff;
   }
 
+  .playback-row {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .btn.icon {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #a8c8d8;
+    padding: 4px 10px;
+    font-size: 11px;
+    border-radius: 4px;
+  }
+  .btn.icon:hover:not(:disabled) { background: rgba(0, 180, 255, 0.15); color: #00c8ff; }
+  .btn.icon.play {
+    background: rgba(0, 180, 255, 0.12);
+    border-color: rgba(0, 200, 255, 0.3);
+    color: #00c8ff;
+    min-width: 36px;
+  }
+  .btn.icon.play:hover { background: rgba(0, 180, 255, 0.25); }
+
   .live-step {
     font-size: 11px;
     color: #a8c8d8;
     text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .overlay-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .overlay-panel {
+    background: rgba(13, 20, 30, 0.97);
+    border: 1px solid rgba(0, 200, 255, 0.25);
+    border-radius: 8px;
+    padding: 16px;
+    width: 720px;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 40px rgba(0, 180, 255, 0.12);
+  }
+
+  .overlay-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: #607080;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .close-btn:hover { color: #a8c8d8; background: rgba(255,255,255,0.05); }
+
+  .config-table {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+  }
+
+  .config-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    line-height: 1.4;
+  }
+
+  .config-key {
+    color: #7090a8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .config-val {
+    color: #a8c8d8;
+    white-space: nowrap;
     font-variant-numeric: tabular-nums;
   }
 </style>

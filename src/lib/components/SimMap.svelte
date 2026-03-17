@@ -106,7 +106,7 @@
         id: 'agents',
         data: agents,
         getPosition: (d: HumanEntity) => [d.x, d.y],
-        getColor: (d: HumanEntity) => agentColor(d.urn),
+        getFillColor: (d: HumanEntity) => agentColor(d.urn),
         getRadius: (d: HumanEntity) => d.id === selId ? 800 : 500,
         radiusMinPixels: 3,
         radiusMaxPixels: 12,
