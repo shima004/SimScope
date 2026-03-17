@@ -93,11 +93,13 @@
         id: 'blockades',
         data: blockades,
         getPolygon: (d: BlockadeEntity) => d.apexes,
-        getFillColor: [180, 140, 60, 200],
-        getLineColor: [220, 180, 80, 255],
-        lineWidthMinPixels: 0.5,
+        getFillColor: [200, 160, 40, 200],
+        getLineColor: (d: BlockadeEntity) =>
+          d.id === selId ? [0, 220, 255, 255] : [240, 200, 60, 255],
+        lineWidthMinPixels: 1,
         pickable: true,
         onClick: (info: PickingInfo) => selectedId.set((info.object as BlockadeEntity)?.id ?? null),
+        updateTriggers: { getLineColor: [selId] },
       }),
 
       new ScatterplotLayer({

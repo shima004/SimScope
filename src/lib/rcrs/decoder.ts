@@ -163,7 +163,13 @@ export function applyChanges(
 ): Map<number, SimEntity> {
   for (const change of changes.changes) {
     const existing = entities.get(change.entityID)
-    if (!existing) continue
+    if (!existing) {
+      // New entity created mid-simulation (e.g. blockade).
+      // EntityChangeProto has the same fields as EntityProto.
+      const entity = decodeEntity(change as unknown as EntityProto)
+      if (entity) entities.set(entity.id, entity)
+      continue
+    }
 
     // Build a partial EntityProto with only the changed properties and
     // decode its property values, then merge into the existing entity.
