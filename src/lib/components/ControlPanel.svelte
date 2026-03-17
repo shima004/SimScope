@@ -168,8 +168,8 @@
 
 <!-- Kernel config overlay -->
 {#if showConfig}
-  <div class="overlay-backdrop" onclick={() => showConfig = false}>
-    <div class="overlay-panel" onclick={(e) => e.stopPropagation()}>
+  <div class="overlay-backdrop" role="presentation" onclick={() => showConfig = false} onkeydown={(e) => e.key === 'Escape' && (showConfig = false)}>
+    <div class="overlay-panel" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
       <div class="overlay-header">
         <span class="section-label">Kernel Config</span>
         <button class="close-btn" onclick={() => showConfig = false}>✕</button>
