@@ -2,6 +2,7 @@ import { LogProto as LogProtoCodec } from "$lib/proto/RCRSLogProto";
 import type { ChangeSetProto, EntityProto } from "$lib/proto/RCRSProto";
 import { applyChanges, decodeEntity } from "$lib/rcrs/decoder";
 import type { SimEntity } from "$lib/rcrs/types";
+import { ComponentControlMsgURN } from "$lib/rcrs/urns";
 import { extract7zAllFiles } from "$lib/sevenzip";
 import { derived, get, writable } from "svelte/store";
 
@@ -29,11 +30,19 @@ let baseEntities = new Map<number, SimEntity>();
  */
 let timeline: Map<number, ChangeSetProto> = new Map();
 
+/**
+ * Per-timestep agent commands — only populated in file mode.
+ * Maps step → (agentId → commandUrn)
+ */
+let commandTimeline: Map<number, Map<number, number>> = new Map();
+
 export const entities = writable<Map<number, SimEntity>>(new Map());
 export const currentStep = writable(0);
 export const maxStep = writable(0);
 export const selectedId   = writable<number | null>(null)
 export const kernelConfig = writable<Record<string, string>>({})
+/** agentId → command URN (current timestep only) */
+export const agentActions = writable<Map<number, number>>(new Map())
 
 export const selectedEntity = derived(
   [entities, selectedId],
@@ -77,6 +86,13 @@ export function connectWS(url: string) {
           applyChanges(map, msg.changes as ChangeSetProto),
         );
         currentStep.set(msg.time);
+        if (Array.isArray(msg.commands)) {
+          const actions = new Map<number, number>();
+          for (const { agentId, urn } of msg.commands as { agentId: number; urn: number }[]) {
+            actions.set(agentId, urn);
+          }
+          agentActions.set(actions);
+        }
       } else if (msg.type === "ERROR") {
         errorMsg.set(`Kernel error: ${msg.reason}`);
       }
@@ -130,18 +146,24 @@ export async function loadFile(file: File) {
       handleLogFrame(LogProtoCodec.decode(files.get(initialKey)!));
     }
 
-    // Collect all N/UPDATES entries and process in numeric order
-    const updates = Array.from(files.keys())
-      .filter((k) => k.endsWith("/UPDATES"))
-      .map((k) => {
-        const parts = k.split("/");
-        const step = parseInt(parts[parts.length - 2], 10);
-        return { step, key: k };
-      })
-      .filter(({ step }) => !isNaN(step))
-      .sort((a, b) => a.step - b.step);
+    // Collect all N/UPDATES and N/COMMANDS entries and process in numeric order
+    function collectStepFiles(suffix: string) {
+      return Array.from(files.keys())
+        .filter((k) => k.endsWith(suffix))
+        .map((k) => {
+          const parts = k.split("/");
+          const step = parseInt(parts[parts.length - 2], 10);
+          return { step, key: k };
+        })
+        .filter(({ step }) => !isNaN(step))
+        .sort((a, b) => a.step - b.step);
+    }
 
-    for (const { key } of updates) {
+    for (const { key } of collectStepFiles("/UPDATES")) {
+      handleLogFrame(LogProtoCodec.decode(files.get(key)!));
+    }
+
+    for (const { key } of collectStepFiles("/COMMANDS")) {
       handleLogFrame(LogProtoCodec.decode(files.get(key)!));
     }
 
@@ -174,6 +196,7 @@ function rebuildState(targetStep: number) {
   }
 
   entities.set(snapshot);
+  agentActions.set(commandTimeline.get(targetStep) ?? new Map());
 }
 
 // ── Frame handling (shared by WS + file) ─────────────────────────────────────
@@ -191,6 +214,16 @@ function handleLogFrame(frame: LogProtoMsg) {
     }
     baseEntities = new Map(map);
     entities.set(map);
+  }
+
+  if (frame.command) {
+    const { time, commands: cmds } = frame.command;
+    const actionMap = new Map<number, number>();
+    for (const cmd of cmds) {
+      const agentId = cmd.components[ComponentControlMsgURN.AgentID]?.entityID;
+      if (agentId !== undefined) actionMap.set(agentId, cmd.urn);
+    }
+    commandTimeline.set(time, actionMap);
   }
 
   if (frame.update) {
@@ -216,9 +249,11 @@ function handleLogFrame(frame: LogProtoMsg) {
 function reset() {
   baseEntities = new Map();
   timeline = new Map();
+  commandTimeline = new Map();
   entities.set(new Map());
   currentStep.set(0);
   maxStep.set(0);
   selectedId.set(null);
   kernelConfig.set({});
+  agentActions.set(new Map());
 }

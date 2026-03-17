@@ -1,5 +1,7 @@
-export const ENTITY_URN_PREFIX = 0x1100 // 4352
-export const PROPERTY_URN_PREFIX = 0x1200 // 4608
+export const ENTITY_URN_PREFIX    = 0x1100 // 4352
+export const PROPERTY_URN_PREFIX  = 0x1200 // 4608
+export const COMMAND_URN_PREFIX   = 0x1300 // 4864
+export const COMP_CMD_URN_PREFIX  = 0x1400 // 5120
 
 export const EntityURN = {
   WORLD:            ENTITY_URN_PREFIX | 1,  // 4353
@@ -111,6 +113,100 @@ export const FIERYNESS_LABEL: Record<number, string> = {
   7: 'Severe Damage',
   8: 'Completely Burned',
 }
+
+export const CommandURN = {
+  AK_REST:       COMMAND_URN_PREFIX | 0x01, // 0x1301
+  AK_MOVE:       COMMAND_URN_PREFIX | 0x02, // 0x1302
+  AK_LOAD:       COMMAND_URN_PREFIX | 0x03, // 0x1303
+  AK_UNLOAD:     COMMAND_URN_PREFIX | 0x04, // 0x1304
+  AK_SAY:        COMMAND_URN_PREFIX | 0x05, // 0x1305
+  AK_TELL:       COMMAND_URN_PREFIX | 0x06, // 0x1306
+  AK_EXTINGUISH: COMMAND_URN_PREFIX | 0x07, // 0x1307
+  AK_RESCUE:     COMMAND_URN_PREFIX | 0x08, // 0x1308
+  AK_CLEAR:      COMMAND_URN_PREFIX | 0x09, // 0x1309
+  AK_CLEAR_AREA: COMMAND_URN_PREFIX | 0x0a, // 0x130a
+  AK_SUBSCRIBE:  COMMAND_URN_PREFIX | 0x0b, // 0x130b
+  AK_SPEAK:      COMMAND_URN_PREFIX | 0x0c, // 0x130c
+} as const
+
+export const CommandURNLabel: Record<number, string> = {
+  [CommandURN.AK_REST]:       'Rest',
+  [CommandURN.AK_MOVE]:       'Move',
+  [CommandURN.AK_LOAD]:       'Load',
+  [CommandURN.AK_UNLOAD]:     'Unload',
+  [CommandURN.AK_SAY]:        'Say',
+  [CommandURN.AK_TELL]:       'Tell',
+  [CommandURN.AK_EXTINGUISH]: 'Extinguish',
+  [CommandURN.AK_RESCUE]:     'Rescue',
+  [CommandURN.AK_CLEAR]:      'Clear',
+  [CommandURN.AK_CLEAR_AREA]: 'Clear Area',
+  [CommandURN.AK_SUBSCRIBE]:  'Subscribe',
+  [CommandURN.AK_SPEAK]:      'Speak',
+}
+
+export const ComponentCommandURN = {
+  Target:       COMP_CMD_URN_PREFIX | 0x01, // 0x1401
+  DestinationX: COMP_CMD_URN_PREFIX | 0x02, // 0x1402
+  DestinationY: COMP_CMD_URN_PREFIX | 0x03, // 0x1403
+  Water:        COMP_CMD_URN_PREFIX | 0x04, // 0x1404
+  Path:         COMP_CMD_URN_PREFIX | 0x05, // 0x1405
+  Message:      COMP_CMD_URN_PREFIX | 0x06, // 0x1406
+  Channel:      COMP_CMD_URN_PREFIX | 0x07, // 0x1407
+  Channels:     COMP_CMD_URN_PREFIX | 0x08, // 0x1408
+} as const
+
+export const ControlMsgURN = {
+  KG_CONNECT:          0x0101,
+  KG_ACKNOWLEDGE:      0x0102,
+  GK_CONNECT_OK:       0x0103,
+  GK_CONNECT_ERROR:    0x0104,
+  SK_CONNECT:          0x0105,
+  SK_ACKNOWLEDGE:      0x0106,
+  SK_UPDATE:           0x0107,
+  KS_CONNECT_OK:       0x0108,
+  KS_CONNECT_ERROR:    0x0109,
+  KS_UPDATE:           0x010a,
+  KS_COMMANDS:         0x010b,
+  KS_AFTERSHOCKS_INFO: 0x010c,
+  VK_CONNECT:          0x010d,
+  VK_ACKNOWLEDGE:      0x010e,
+  KV_CONNECT_OK:       0x010f,
+  KV_CONNECT_ERROR:    0x0110,
+  KV_TIMESTEP:         0x0111,
+  AK_CONNECT:          0x0112,
+  AK_ACKNOWLEDGE:      0x0113,
+  KA_CONNECT_OK:       0x0114,
+  KA_CONNECT_ERROR:    0x0115,
+  KA_SENSE:            0x0116,
+  SHUTDOWN:            0x0117,
+  ENTITY_ID_REQUEST:   0x0118,
+  ENTITY_ID_RESPONSE:  0x0119,
+} as const
+
+export const ComponentControlMsgURN = {
+  RequestID:            0x0201,
+  AgentID:              0x0202,
+  Version:              0x0203,
+  Name:                 0x0204,
+  RequestedEntityTypes: 0x0205,
+  SimulatorID:          0x0206,
+  RequestNumber:        0x0207,
+  NumberOfIDs:          0x0208,
+  NewEntityIDs:         0x0209,
+  Reason:               0x020a,
+  Entities:             0x020b,
+  ViewerID:             0x020c,
+  AgentConfig:          0x020d,
+  Time:                 0x020e,
+  Updates:              0x020f,
+  Hearing:              0x0210,
+  INTENSITIES:          0x0211,
+  TIMES:                0x0212,
+  ID:                   0x0213,
+  Commands:             0x0214,
+  SimulatorConfig:      0x0215,
+  Changes:              0x0216,
+} as const
 
 export function isAgent(urn: number): boolean {
   return urn === EntityURN.CIVILIAN ||

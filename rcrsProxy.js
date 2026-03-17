@@ -16,6 +16,7 @@ import protobuf from "protobufjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = protobuf.loadSync(join(__dirname, "proto/RCRSProto.proto"));
 const MessageProtoType = root.lookupType("MessageProto");
+const MessageListProtoType = root.lookupType("MessageListProto");
 const EntityListProtoType = root.lookupType("EntityListProto");
 const ChangeSetProtoType = root.lookupType("ChangeSetProto");
 
@@ -29,14 +30,16 @@ const URN = {
   KV_TIMESTEP: 0x0111,
   // Component keys
   RequestID: 0x0201,
-  Version: 0x0203,
-  Name: 0x0204,
-  Entities: 0x020b,
-  ViewerID: 0x020c,
+  AgentID:   0x0202,
+  Version:   0x0203,
+  Name:      0x0204,
+  Entities:  0x020b,
+  ViewerID:  0x020c,
   AgentConfig: 0x020d,
-  Time: 0x020e,
-  Updates: 0x020f,
-  Changes: 0x0216,
+  Time:      0x020e,
+  Updates:   0x020f,
+  Commands:  0x0214,
+  Changes:   0x0216,
 };
 
 const TOOBJ_OPTS = { defaults: true, longs: Number };
@@ -155,10 +158,20 @@ export function handleRcrsViewer(ws, tcpHost, tcpPort) {
         ? ChangeSetProtoType.toObject(changeSetMsg, TOOBJ_OPTS)
         : { changes: [], deletes: [] };
 
+      const commandListMsg = comps[URN.Commands]?.commandList;
+      const commands = [];
+      if (commandListMsg) {
+        const cmdList = MessageListProtoType.toObject(commandListMsg, TOOBJ_OPTS);
+        for (const cmd of (cmdList.commands ?? [])) {
+          const agentId = cmd.components?.[URN.AgentID]?.entityID ?? 0;
+          if (agentId) commands.push({ urn: cmd.urn, agentId });
+        }
+      }
+
       console.log(
-        `[proxy] KVTimestep: time=${time}, changes=${changes.changes?.length ?? 0}`,
+        `[proxy] KVTimestep: time=${time}, changes=${changes.changes?.length ?? 0}, commands=${commands.length}`,
       );
-      send({ type: "TIMESTEP", time, changes });
+      send({ type: "TIMESTEP", time, changes, commands });
     }
   }
 

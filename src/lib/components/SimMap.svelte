@@ -3,8 +3,8 @@
   import { Deck, OrthographicView } from '@deck.gl/core'
   import type { PickingInfo, OrthographicViewState } from '@deck.gl/core'
   import { PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
-  import { entities, selectedId } from '$lib/stores/simulation'
-  import { EntityURN, isBuilding, isAgent } from '$lib/rcrs/urns'
+  import { entities, selectedId, agentActions } from '$lib/stores/simulation'
+  import { CommandURN, EntityURN, isBuilding, isAgent } from '$lib/rcrs/urns'
   import type { SimEntity, BuildingEntity, RoadEntity, BlockadeEntity, HumanEntity } from '$lib/rcrs/types'
 
   let canvas: HTMLCanvasElement
@@ -36,19 +36,22 @@
     return e.brokenness > 50 ? [180, 120, 60, 220] : [80, 100, 140, 220]
   }
 
-  function agentColor(urn: number): [number, number, number, number] {
+  function agentColor(urn: number, action?: number): [number, number, number, number] {
+    if (urn === EntityURN.FIRE_BRIGADE && action === CommandURN.AK_RESCUE) {
+      return [255, 140, 0, 255]  // rescue中: オレンジ
+    }
     switch (urn) {
-      case EntityURN.FIRE_BRIGADE:   return [255, 80,  40,  255]
-      case EntityURN.AMBULANCE_TEAM: return [40,  200, 100, 255]
+      case EntityURN.FIRE_BRIGADE:   return [220, 30,  30,  255]  // 赤
+      case EntityURN.AMBULANCE_TEAM: return [240, 240, 240, 255]  // 白
       case EntityURN.POLICE_FORCE:   return [60,  140, 255, 255]
-      case EntityURN.CIVILIAN:       return [200, 200, 80,  255]
+      case EntityURN.CIVILIAN:       return [60,  200, 80,  255]  // 緑
       default:                       return [200, 200, 200, 255]
     }
   }
 
   // ── Layer builders ────────────────────────────────────────────────────────
 
-  function buildLayers(emap: Map<number, SimEntity>, selId: number | null) {
+  function buildLayers(emap: Map<number, SimEntity>, selId: number | null, actions: Map<number, number>) {
     const roads:     RoadEntity[]     = []
     const buildings: BuildingEntity[] = []
     const blockades: BlockadeEntity[] = []
@@ -106,13 +109,13 @@
         id: 'agents',
         data: agents,
         getPosition: (d: HumanEntity) => [d.x, d.y],
-        getFillColor: (d: HumanEntity) => agentColor(d.urn),
+        getFillColor: (d: HumanEntity) => agentColor(d.urn, actions.get(d.id)),
         getRadius: (d: HumanEntity) => d.id === selId ? 800 : 500,
         radiusMinPixels: 3,
         radiusMaxPixels: 12,
         pickable: true,
         onClick: (info: PickingInfo) => selectedId.set((info.object as HumanEntity)?.id ?? null),
-        updateTriggers: { getRadius: [selId] },
+        updateTriggers: { getRadius: [selId], getFillColor: [actions] },
       }),
 
       // POSITION_HISTORY のエンティティ ID → X,Y でパスを構築
@@ -127,7 +130,7 @@
           return pts
         },
         getColor: (d: HumanEntity) => {
-          const [r, g, b] = agentColor(d.urn)
+          const [r, g, b] = agentColor(d.urn, actions.get(d.id))
           return [r, g, b, d.id === selId ? 220 : 60] as [number, number, number, number]
         },
         getWidth: (d: HumanEntity) => d.id === selId ? 400 : 200,
@@ -194,7 +197,7 @@
   const unsubEntities = entities.subscribe((emap) => {
     if (!deck) return
     const selId = $selectedId
-    deck.setProps({ layers: buildLayers(emap, selId) })
+    deck.setProps({ layers: buildLayers(emap, selId, $agentActions) })
     if (prevSize === 0 && emap.size > 0) fitViewport(emap)
     prevSize = emap.size
     followAgent(emap, selId)
@@ -202,8 +205,13 @@
 
   const unsubSel = selectedId.subscribe((selId) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, selId) })
+    deck.setProps({ layers: buildLayers($entities, selId, $agentActions) })
     followAgent($entities, selId)
+  })
+
+  const unsubActions = agentActions.subscribe((actions) => {
+    if (!deck) return
+    deck.setProps({ layers: buildLayers($entities, $selectedId, actions) })
   })
 
   // ── Deck.gl lifecycle ─────────────────────────────────────────────────────
@@ -227,6 +235,7 @@
   onDestroy(() => {
     unsubEntities()
     unsubSel()
+    unsubActions()
     deck?.finalize()
   })
 </script>
