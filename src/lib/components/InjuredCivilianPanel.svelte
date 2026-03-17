@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { HumanEntity } from '$lib/rcrs/types';
-  import { EntityURN } from '$lib/rcrs/urns';
+  import { EntityURN, entityColor } from '$lib/rcrs/urns';
   import { entities, focusPoint, selectedId } from '$lib/stores/simulation';
 
   const injured = $derived.by(() => {
@@ -28,13 +28,12 @@
 {#if injured.length > 0}
   <div class="panel">
     <div class="header">
-      <span class="label">Injured Civilians</span>
-      <span class="count">{injured.length}</span>
+      <span class="label">Injured Civilians（{injured.length}）</span>
     </div>
     <div class="list">
       {#each injured as h (h.id)}
         <button class="row" onclick={() => focusOn(h)} class:selected={$selectedId === h.id}>
-          <span class="cid">#{h.id}</span>
+          <span class="cid" style="color:{entityColor(h.urn)}">#{h.id}</span>
           <span class="stat">
             <span class="bar-wrap"><span class="bar" style="width:{Math.min(100, h.hp / 100)}%"></span></span>
             <span class="num">{h.hp.toLocaleString()}</span>
@@ -82,13 +81,7 @@
     color: #00c8ff;
   }
 
-  .count {
-    font-size: 11px;
-    color: #607080;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .list {
+.list {
     overflow-y: auto;
     padding: 4px 6px 6px;
     display: flex;

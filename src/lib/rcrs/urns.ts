@@ -208,6 +208,23 @@ export const ComponentControlMsgURN = {
   Changes:              0x0216,
 } as const
 
+/** エンティティ種別に対応する CSS カラー文字列を返す */
+export function entityColor(urn: number, hp = 10000): string {
+  switch (urn) {
+    case EntityURN.FIRE_BRIGADE:   return '#dc1e1e'
+    case EntityURN.AMBULANCE_TEAM: return '#f0f0f0'
+    case EntityURN.POLICE_FORCE:   return '#3c8cff'
+    case EntityURN.CIVILIAN: {
+      const t = Math.max(0, Math.min(1, hp / 10000))
+      const r = Math.round(60  * t)
+      const g = Math.round(200 * t)
+      const b = Math.round(80  * t)
+      return `rgb(${r},${g},${b})`
+    }
+    default: return '#607080'
+  }
+}
+
 export function isAgent(urn: number): boolean {
   return urn === EntityURN.CIVILIAN ||
     urn === EntityURN.FIRE_BRIGADE ||

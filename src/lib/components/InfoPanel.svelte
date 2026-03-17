@@ -1,6 +1,6 @@
 <script lang="ts">
   import { entities, selectedEntity, selectedId } from '$lib/stores/simulation'
-  import { EntityURNLabel, FIERYNESS_LABEL, EntityURN } from '$lib/rcrs/urns'
+  import { EntityURNLabel, FIERYNESS_LABEL, EntityURN, entityColor } from '$lib/rcrs/urns'
   import type { BuildingEntity, RefugeEntity, HumanEntity, BlockadeEntity, FireBrigadeEntity, AreaEntity } from '$lib/rcrs/types'
 
   function close() {
@@ -28,7 +28,7 @@
   <aside class="panel">
     <header>
       <span class="type-badge">{typeLabel(e.urn)}</span>
-      <span class="entity-id">#{e.id}</span>
+      <span class="entity-id" style="color:{entityColor(e.urn, 'hp' in e ? (e as HumanEntity).hp : 10000)}">#{e.id}</span>
       <button class="close-btn" onclick={close} aria-label="Close">✕</button>
     </header>
 

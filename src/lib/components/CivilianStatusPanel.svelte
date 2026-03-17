@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { HumanEntity } from '$lib/rcrs/types';
-  import { CommandURN, EntityURN } from '$lib/rcrs/urns';
+  import { CommandURN, EntityURN, entityColor, isAgent } from '$lib/rcrs/urns';
   import { agentActions, entities, focusPoint, selectedId } from '$lib/stores/simulation';
 
   // 救助中の市民: AK_RESCUE アクションのターゲット（重複排除）
@@ -30,21 +30,59 @@
     return result
   })
 
+  // 埋まっているエージェント（救助中は除外）、buriedness 降順
+  const buriedCivilians = $derived.by(() => {
+    const rescuedIds = new Set(rescuedCivilians.map(c => c.id))
+    const result: HumanEntity[] = []
+    for (const e of $entities.values()) {
+      if (!isAgent(e.urn)) continue
+      const h = e as HumanEntity
+      if (h.buriedness === 0) continue
+      if (rescuedIds.has(h.id)) continue
+      result.push(h)
+    }
+    const urnOrder: Record<number, number> = {
+      [EntityURN.FIRE_BRIGADE]: 0,
+      [EntityURN.AMBULANCE_TEAM]: 1,
+      [EntityURN.POLICE_FORCE]: 2,
+      [EntityURN.CIVILIAN]: 3,
+    }
+    return result.sort((a, b) => {
+      const ro = (urnOrder[a.urn] ?? 9) - (urnOrder[b.urn] ?? 9)
+      if (ro !== 0) return ro
+      return a.id - b.id
+    })
+  })
+
   function focusOn(x: number, y: number, id: number) {
     selectedId.set(id)
     focusPoint.set({ x, y })
   }
 
-  const hasAny = $derived(rescuedCivilians.length > 0 || carriedCivilians.length > 0)
+  const hasAny = $derived(buriedCivilians.length > 0 || rescuedCivilians.length > 0 || carriedCivilians.length > 0)
 </script>
 
 {#if hasAny}
   <div class="panel">
+    {#if carriedCivilians.length > 0}
+      <div class="section-label">Carrying ({carriedCivilians.length})</div>
+      {#each carriedCivilians as { civilian: c, carrier } (c.id)}
+        <button class="row" onclick={() => focusOn(carrier.x, carrier.y, c.id)} class:selected={$selectedId === c.id}>
+          <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
+          <span class="stat">
+            <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"></span></span>
+            <span class="num">{c.hp.toLocaleString()}</span>
+          </span>
+          <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ''}</span>
+        </button>
+      {/each}
+    {/if}
+
     {#if rescuedCivilians.length > 0}
       <div class="section-label">Rescuing ({rescuedCivilians.length})</div>
       {#each rescuedCivilians as c (c.id)}
         <button class="row" onclick={() => focusOn(c.x, c.y, c.id)} class:selected={$selectedId === c.id}>
-          <span class="cid">#{c.id}</span>
+          <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
           <span class="stat">
             <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"></span></span>
             <span class="num">{c.hp.toLocaleString()}</span>
@@ -55,15 +93,16 @@
       {/each}
     {/if}
 
-    {#if carriedCivilians.length > 0}
-      <div class="section-label">Carrying ({carriedCivilians.length})</div>
-      {#each carriedCivilians as { civilian: c, carrier } (c.id)}
-        <button class="row" onclick={() => focusOn(carrier.x, carrier.y, c.id)} class:selected={$selectedId === c.id}>
-          <span class="cid">#{c.id}</span>
+    {#if buriedCivilians.length > 0}
+      <div class="section-label">Buried ({buriedCivilians.length})</div>
+      {#each buriedCivilians as c (c.id)}
+        <button class="row" onclick={() => focusOn(c.x, c.y, c.id)} class:selected={$selectedId === c.id}>
+          <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
           <span class="stat">
             <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"></span></span>
             <span class="num">{c.hp.toLocaleString()}</span>
           </span>
+          <span class="badge bury">B:{c.buriedness}</span>
           <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ''}</span>
         </button>
       {/each}
