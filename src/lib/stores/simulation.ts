@@ -50,6 +50,8 @@ export const selectedId   = writable<number | null>(null)
 export const kernelConfig = writable<Record<string, string>>({})
 /** マップを指定座標にズームさせるトリガー。セット後 SimMap が null にリセット */
 export const focusPoint = writable<{ x: number; y: number } | null>(null)
+/** 選択中エージェントへの追従モード */
+export const followMode = writable(false)
 /** agentId → AgentAction (current timestep only) */
 export const agentActions = writable<Map<number, AgentAction>>(new Map())
 /** 初期ステップの瓦礫 repairCost 合計（除去率計算用） */

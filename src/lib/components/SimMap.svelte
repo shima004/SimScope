@@ -2,7 +2,7 @@
   import type { BlockadeEntity, BuildingEntity, HumanEntity, RoadEntity, SimEntity } from '$lib/rcrs/types';
   import { CommandURN, EntityURN, isAgent, isBuilding } from '$lib/rcrs/urns';
   import type { AgentAction } from '$lib/stores/simulation';
-  import { agentActions, entities, focusPoint, kernelConfig, selectedId } from '$lib/stores/simulation';
+  import { agentActions, entities, focusPoint, followMode, kernelConfig, selectedId } from '$lib/stores/simulation';
   import type { OrthographicViewState, PickingInfo } from '@deck.gl/core';
   import { Deck, OrthographicView } from '@deck.gl/core';
   import { PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
@@ -266,12 +266,11 @@
 
   // ── Follow mode ───────────────────────────────────────────────────────────
 
-  let followMode = $state(false)
   let currentZoom = 0
   let fitZoom = 0
 
   function followAgent(emap: Map<number, SimEntity>, selId: number | null) {
-    if (!followMode || selId === null || !deck) return
+    if (!$followMode || selId === null || !deck) return
     const e = emap.get(selId)
     if (!e || !isAgent(e.urn)) return
     const h = e as HumanEntity
@@ -352,14 +351,6 @@
 
 <canvas bind:this={canvas} class="sim-canvas"></canvas>
 
-<button
-  class="follow-btn"
-  class:active={followMode}
-  onclick={() => followMode = !followMode}
-  title="選択中のエージェントに追従"
->
-  {followMode ? '⊙ Follow ON' : '⊙ Follow'}
-</button>
 
 <style>
   .sim-canvas {
@@ -369,24 +360,4 @@
     background: #0d1117;
   }
 
-  .follow-btn {
-    position: absolute;
-    bottom: 16px;
-    right: 16px;
-    background: rgba(13, 20, 30, 0.88);
-    border: 1px solid rgba(0, 200, 255, 0.2);
-    border-radius: 4px;
-    color: #607080;
-    font-size: 12px;
-    padding: 5px 10px;
-    cursor: pointer;
-    backdrop-filter: blur(4px);
-    z-index: 10;
-  }
-  .follow-btn:hover { border-color: rgba(0, 200, 255, 0.4); color: #a8c8d8; }
-  .follow-btn.active {
-    border-color: rgba(0, 200, 255, 0.6);
-    color: #00c8ff;
-    background: rgba(0, 180, 255, 0.12);
-  }
 </style>

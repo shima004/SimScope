@@ -5,6 +5,7 @@
     currentStep,
     disconnectWS,
     errorMsg,
+    followMode,
     kernelConfig,
     loadFile,
     loading,
@@ -164,6 +165,15 @@
   {#if Object.keys($kernelConfig).length > 0}
     <button class="btn primary" onclick={() => showConfig = true}>Kernel Config</button>
   {/if}
+
+  {#if $mode !== 'idle'}
+    <button
+      class="btn follow"
+      class:active={$followMode}
+      onclick={() => followMode.update(v => !v)}
+      title="選択中のエージェントに追従"
+    >{$followMode ? '⊙ Follow ON' : '⊙ Follow OFF'}</button>
+  {/if}
 </div>
 
 <!-- Kernel config overlay -->
@@ -256,6 +266,9 @@
     color: #00c8ff;
   }
   .btn.primary:hover { background: rgba(0, 180, 255, 0.25); }
+  .btn.follow { border: 1px solid rgba(0, 200, 255, 0.6); color: #00c8ff; background: rgba(0, 180, 255, 0.12); }
+  .btn.follow:hover { border-color: rgba(0, 200, 255, 0.4); color: #a8c8d8; }
+  .btn.follow.active { border: 1px solid rgba(255, 200, 60, 0.5); color: #ffc840; background: rgba(255, 200, 60, 0.1); }
   .btn.danger {
     background: rgba(255, 60, 60, 0.12);
     border: 1px solid rgba(255, 80, 80, 0.3);

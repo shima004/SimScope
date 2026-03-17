@@ -113,7 +113,7 @@
 <style>
   .panel {
     position: absolute;
-    bottom: 56px;
+    bottom: 16px;
     right: 16px;
     width: 240px;
     max-height: 340px;
