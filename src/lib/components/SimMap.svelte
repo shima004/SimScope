@@ -36,9 +36,12 @@
     return e.brokenness > 50 ? [180, 120, 60, 220] : [80, 100, 140, 220]
   }
 
-  function agentColor(urn: number, action?: number): [number, number, number, number] {
+  function agentColor(urn: number, action?: number, carrying = false): [number, number, number, number] {
     if (urn === EntityURN.FIRE_BRIGADE && action === CommandURN.AK_RESCUE) {
-      return [255, 140, 0, 255]  // rescue中: オレンジ
+      return [255, 140, 0,   255]  // rescue中: オレンジ
+    }
+    if (urn === EntityURN.AMBULANCE_TEAM && carrying) {
+      return [255, 200, 60,  255]  // 市民搬送中: 黄色
     }
     switch (urn) {
       case EntityURN.FIRE_BRIGADE:   return [220, 30,  30,  255]  // 赤
@@ -62,6 +65,15 @@
       else if (isBuilding(e.urn))            buildings.push(e as BuildingEntity)
       else if (e.urn === EntityURN.BLOCKADE) blockades.push(e as BlockadeEntity)
       else if (isAgent(e.urn))               agents.push(e as HumanEntity)
+    }
+
+    // 市民の position が救急隊の ID になっていれば「搬送中」
+    const carryingAmbulances = new Set<number>()
+    for (const e of emap.values()) {
+      if (e.urn === EntityURN.CIVILIAN) {
+        const carrier = emap.get((e as HumanEntity).position)
+        if (carrier?.urn === EntityURN.AMBULANCE_TEAM) carryingAmbulances.add(carrier.id)
+      }
     }
 
     return [
@@ -109,7 +121,7 @@
         id: 'agents',
         data: agents,
         getPosition: (d: HumanEntity) => [d.x, d.y],
-        getFillColor: (d: HumanEntity) => agentColor(d.urn, actions.get(d.id)),
+        getFillColor: (d: HumanEntity) => agentColor(d.urn, actions.get(d.id), carryingAmbulances.has(d.id)),
         getRadius: (d: HumanEntity) => d.id === selId ? 800 : 500,
         radiusMinPixels: 3,
         radiusMaxPixels: 12,
@@ -130,7 +142,7 @@
           return pts
         },
         getColor: (d: HumanEntity) => {
-          const [r, g, b] = agentColor(d.urn, actions.get(d.id))
+          const [r, g, b] = agentColor(d.urn, actions.get(d.id), carryingAmbulances.has(d.id))
           return [r, g, b, d.id === selId ? 220 : 60] as [number, number, number, number]
         },
         getWidth: (d: HumanEntity) => d.id === selId ? 400 : 200,

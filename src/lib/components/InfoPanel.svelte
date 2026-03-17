@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { selectedEntity, selectedId } from '$lib/stores/simulation'
+  import { entities, selectedEntity, selectedId } from '$lib/stores/simulation'
   import { EntityURNLabel, FIERYNESS_LABEL, EntityURN } from '$lib/rcrs/urns'
   import type { BuildingEntity, RefugeEntity, HumanEntity, BlockadeEntity, FireBrigadeEntity, AreaEntity } from '$lib/rcrs/types'
 
@@ -9,6 +9,17 @@
 
   function typeLabel(urn: number) {
     return EntityURNLabel[urn] ?? `URN:${urn}`
+  }
+
+  // 搬送中の市民を探す（市民の position が救急隊の ID と一致）
+  function findCarriedCivilian(ambulanceId: number): HumanEntity | null {
+    for (const e of $entities.values()) {
+      if (e.urn === EntityURN.CIVILIAN) {
+        const h = e as HumanEntity
+        if (h.position === ambulanceId) return h
+      }
+    }
+    return null
   }
 </script>
 
@@ -103,6 +114,36 @@
           <span class="key">Waiting</span>
           <span class="val">{r.waitingListSize}</span>
         </div>
+      {/if}
+
+      <!-- Carried civilian (Ambulance Team) -->
+      {#if e.urn === EntityURN.AMBULANCE_TEAM}
+        {@const carried = findCarriedCivilian(e.id)}
+        {#if carried}
+          <div class="section-label">Carrying #{ carried.id}</div>
+          <div class="row">
+            <span class="key">HP</span>
+            <span class="val">
+              <span class="bar-wrap">
+                <span class="bar hp" style="width:{Math.min(100, carried.hp / 100)}%"></span>
+              </span>
+              {carried.hp.toLocaleString()}
+            </span>
+          </div>
+          <div class="row">
+            <span class="key">Damage</span>
+            <span class="val">{carried.damage.toLocaleString()}</span>
+          </div>
+          <div class="row">
+            <span class="key">Buriedness</span>
+            <span class="val">{carried.buriedness}</span>
+          </div>
+          <button class="select-btn" onclick={() => selectedId.set(carried.id)}>
+            Select civilian →
+          </button>
+        {:else}
+          <div class="section-label">No passenger</div>
+        {/if}
       {/if}
 
       <!-- Fire Brigade water -->
@@ -216,6 +257,30 @@
   }
   .bar.hp     { background: #40c870; }
   .bar.refuge { background: #40c898; }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #ffc840;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 200, 60, 0.2);
+  }
+
+  .select-btn {
+    margin-top: 2px;
+    background: none;
+    border: 1px solid rgba(255, 200, 60, 0.3);
+    border-radius: 4px;
+    color: #ffc840;
+    font-size: 11px;
+    padding: 3px 8px;
+    cursor: pointer;
+    align-self: flex-start;
+  }
+  .select-btn:hover { background: rgba(255, 200, 60, 0.1); }
 
   .fiery-0 { color: #80c0a0; }
   .fiery-1 { color: #ffc040; }
