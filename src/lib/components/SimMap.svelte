@@ -1,0 +1,194 @@
+<script lang="ts">
+  import { onMount, onDestroy } from 'svelte'
+  import { Deck, OrthographicView } from '@deck.gl/core'
+  import type { PickingInfo, OrthographicViewState } from '@deck.gl/core'
+  import { PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
+  import { entities, selectedId } from '$lib/stores/simulation'
+  import { EntityURN, isBuilding, isAgent } from '$lib/rcrs/urns'
+  import type { SimEntity, BuildingEntity, RoadEntity, BlockadeEntity, HumanEntity } from '$lib/rcrs/types'
+
+  let canvas: HTMLCanvasElement
+  let deck: Deck<OrthographicView> | null = null
+
+  // ── Color helpers ─────────────────────────────────────────────────────────
+
+  // Base color per facility type (used when not on fire)
+  const FACILITY_COLOR: Partial<Record<number, [number, number, number]>> = {
+    [EntityURN.REFUGE]:           [40,  200, 100],  // 避難所: 緑
+    [EntityURN.FIRE_STATION]:     [220, 60,  60 ],  // 消防署: 赤
+    [EntityURN.AMBULANCE_CENTRE]: [60,  160, 220],  // 救急センター: 水色
+    [EntityURN.POLICE_OFFICE]:    [80,  80,  220],  // 警察署: 青
+    [EntityURN.GAS_STATION]:      [220, 180, 40 ],  // ガスステーション: 黄
+    [EntityURN.HYDRANT]:          [40,  220, 220],  // 消火栓: シアン
+  }
+
+  function buildingColor(e: BuildingEntity): [number, number, number, number] {
+    const f = e.fieryness
+    // Burning / burned state overrides facility color
+    if (f >= 1 && f <= 3) return [255, Math.max(0, 180 - f * 50), 0, 230]
+    if (f === 8)          return [60,  40,  40,  200]
+    if (f >= 4 && f <= 7) return [160, 80,  40,  200]
+
+    const base = FACILITY_COLOR[e.urn]
+    if (base) return [...base, 240] as [number, number, number, number]
+
+    // Regular building: darken with brokenness
+    return e.brokenness > 50 ? [180, 120, 60, 220] : [80, 100, 140, 220]
+  }
+
+  function agentColor(urn: number): [number, number, number, number] {
+    switch (urn) {
+      case EntityURN.FIRE_BRIGADE:   return [255, 80,  40,  255]
+      case EntityURN.AMBULANCE_TEAM: return [40,  200, 100, 255]
+      case EntityURN.POLICE_FORCE:   return [60,  140, 255, 255]
+      case EntityURN.CIVILIAN:       return [200, 200, 80,  255]
+      default:                       return [200, 200, 200, 255]
+    }
+  }
+
+  // ── Layer builders ────────────────────────────────────────────────────────
+
+  function buildLayers(emap: Map<number, SimEntity>, selId: number | null) {
+    const roads:     RoadEntity[]     = []
+    const buildings: BuildingEntity[] = []
+    const blockades: BlockadeEntity[] = []
+    const agents:    HumanEntity[]    = []
+
+    for (const e of emap.values()) {
+      if (e.urn === EntityURN.ROAD)          roads.push(e as RoadEntity)
+      else if (isBuilding(e.urn))            buildings.push(e as BuildingEntity)
+      else if (e.urn === EntityURN.BLOCKADE) blockades.push(e as BlockadeEntity)
+      else if (isAgent(e.urn))               agents.push(e as HumanEntity)
+    }
+
+    return [
+      new PolygonLayer({
+        id: 'roads',
+        data: roads,
+        getPolygon: (d: RoadEntity) => d.apexes,
+        getFillColor: [45, 55, 70, 200],
+        getLineColor: [70, 85, 105, 255],
+        lineWidthMinPixels: 0.5,
+        pickable: true,
+        onClick: (info: PickingInfo) => selectedId.set((info.object as RoadEntity)?.id ?? null),
+      }),
+
+      new PolygonLayer({
+        id: 'buildings',
+        data: buildings,
+        getPolygon: (d: BuildingEntity) => d.apexes,
+        getFillColor: (d: BuildingEntity) => buildingColor(d),
+        getLineColor: (d: BuildingEntity) =>
+          d.id === selId ? [0, 220, 255, 255] : [100, 120, 160, 180],
+        lineWidthMinPixels: 0.5,
+        pickable: true,
+        onClick: (info: PickingInfo) => selectedId.set((info.object as BuildingEntity)?.id ?? null),
+        updateTriggers: {
+          getFillColor: buildings.map(b => b.fieryness * 100 + b.brokenness),
+          getLineColor: [selId],
+        },
+      }),
+
+      new PolygonLayer({
+        id: 'blockades',
+        data: blockades,
+        getPolygon: (d: BlockadeEntity) => d.apexes,
+        getFillColor: [180, 140, 60, 200],
+        getLineColor: [220, 180, 80, 255],
+        lineWidthMinPixels: 0.5,
+        pickable: true,
+        onClick: (info: PickingInfo) => selectedId.set((info.object as BlockadeEntity)?.id ?? null),
+      }),
+
+      new ScatterplotLayer({
+        id: 'agents',
+        data: agents,
+        getPosition: (d: HumanEntity) => [d.x, d.y],
+        getColor: (d: HumanEntity) => agentColor(d.urn),
+        getRadius: (d: HumanEntity) => d.id === selId ? 800 : 500,
+        radiusMinPixels: 3,
+        radiusMaxPixels: 12,
+        pickable: true,
+        onClick: (info: PickingInfo) => selectedId.set((info.object as HumanEntity)?.id ?? null),
+        updateTriggers: { getRadius: [selId] },
+      }),
+    ]
+  }
+
+  // ── Viewport fit ──────────────────────────────────────────────────────────
+
+  function fitViewport(emap: Map<number, SimEntity>) {
+    if (emap.size === 0 || !deck) return
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const e of emap.values()) {
+      if ('apexes' in e) {
+        for (const [x, y] of (e as { apexes: [number, number][] }).apexes) {
+          if (x < minX) minX = x
+          if (y < minY) minY = y
+          if (x > maxX) maxX = x
+          if (y > maxY) maxY = y
+        }
+      }
+    }
+    if (!isFinite(minX)) return
+
+    const cx = (minX + maxX) / 2
+    const cy = (minY + maxY) / 2
+    const span = Math.max(maxX - minX, maxY - minY)
+    const viewSize = Math.min(canvas.clientWidth, canvas.clientHeight)
+    const zoom = Math.log2(viewSize / span) - 0.2
+
+    const target: [number, number, number] = [cx, cy, 0]
+    const viewState: OrthographicViewState = { target, zoom, minZoom: zoom - 5, maxZoom: zoom + 10 }
+    deck.setProps({ initialViewState: viewState })
+  }
+
+  // ── Store subscriptions ───────────────────────────────────────────────────
+
+  let prevSize = 0
+
+  const unsubEntities = entities.subscribe((emap) => {
+    if (!deck) return
+    const selId = $selectedId
+    deck.setProps({ layers: buildLayers(emap, selId) })
+    if (prevSize === 0 && emap.size > 0) fitViewport(emap)
+    prevSize = emap.size
+  })
+
+  const unsubSel = selectedId.subscribe((selId) => {
+    if (!deck) return
+    deck.setProps({ layers: buildLayers($entities, selId) })
+  })
+
+  // ── Deck.gl lifecycle ─────────────────────────────────────────────────────
+
+  onMount(() => {
+    const initialViewState: OrthographicViewState = { target: [0, 0, 0], zoom: 0 }
+    deck = new Deck<OrthographicView>({
+      canvas,
+      views: new OrthographicView({ id: 'ortho', flipY: false }),
+      initialViewState,
+      controller: true,
+      layers: [],
+      getCursor: ({ isDragging }) => isDragging ? 'grabbing' : 'crosshair',
+    })
+  })
+
+  onDestroy(() => {
+    unsubEntities()
+    unsubSel()
+    deck?.finalize()
+  })
+</script>
+
+<canvas bind:this={canvas} class="sim-canvas"></canvas>
+
+<style>
+  .sim-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: #0d1117;
+  }
+</style>

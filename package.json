@@ -1,0 +1,31 @@
+{
+	"name": "simscope",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"proto": "protoc --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=src/lib/proto --ts_proto_opt=esModuleInterop=true,outputEncodeMethods=true,outputJsonMethods=false,useOptionals=messages --proto_path=proto proto/RCRSProto.proto proto/RCRSLogProto.proto"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-auto": "^7.0.0",
+		"@sveltejs/kit": "^2.50.2",
+		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"svelte": "^5.51.0",
+		"svelte-check": "^4.4.2",
+		"ts-proto": "^2.11.5",
+		"typescript": "^5.9.3",
+		"vite": "^7.3.1"
+	},
+	"dependencies": {
+		"@bufbuild/protobuf": "^2.11.0",
+		"7z-wasm": "^1.2.0",
+		"deck.gl": "^9.2.11",
+		"protobufjs": "^8.0.0"
+	}
+}
