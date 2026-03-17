@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { entities, agentActions, selectedId, focusPoint } from '$lib/stores/simulation'
-  import { EntityURN, isAgent } from '$lib/rcrs/urns'
-  import { CommandURN } from '$lib/rcrs/urns'
-  import type { HumanEntity } from '$lib/rcrs/types'
+  import type { HumanEntity } from '$lib/rcrs/types';
+  import { CommandURN, EntityURN } from '$lib/rcrs/urns';
+  import { agentActions, entities, focusPoint, selectedId } from '$lib/stores/simulation';
 
   // 救助中の市民: AK_RESCUE アクションのターゲット（重複排除）
   const rescuedCivilians = $derived.by(() => {
@@ -126,7 +125,7 @@
   .cid {
     color: #607080;
     font-size: 11px;
-    width: 44px;
+    min-width: 68px;
     flex-shrink: 0;
   }
 
@@ -157,6 +156,9 @@
     font-size: 11px;
     color: #a8c8d8;
     font-variant-numeric: tabular-nums;
+    width: 28px;
+    flex-shrink: 0;
+    text-align: right;
   }
 
   .badge {

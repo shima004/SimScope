@@ -3,6 +3,7 @@
   import InfoPanel from '$lib/components/InfoPanel.svelte'
   import ControlPanel from '$lib/components/ControlPanel.svelte'
   import CivilianStatusPanel from '$lib/components/CivilianStatusPanel.svelte'
+  import InjuredCivilianPanel from '$lib/components/InjuredCivilianPanel.svelte'
 </script>
 
 <div class="app">
@@ -10,6 +11,7 @@
   <ControlPanel />
   <InfoPanel />
   <CivilianStatusPanel />
+  <InjuredCivilianPanel />
 </div>
 
 <style>
