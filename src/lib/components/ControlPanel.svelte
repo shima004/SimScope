@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import {
     connected,
     connectWS,
@@ -16,13 +17,19 @@
   } from '$lib/stores/simulation';
 
   // /proxy?host=<tcp-host>&port=<tcp-port> → Vite の tcpWsProxyPlugin が中継
-  let tcpHost = $state('localhost')
-  let tcpPort = $state('27931')
+  const _q = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
+  let tcpHost = $state(_q.get('host') ?? 'localhost')
+  let tcpPort = $state(_q.get('port') ?? '27931')
   const wsUrl = $derived(
     `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost:5173'}/proxy?host=${tcpHost}&port=${tcpPort}`
   )
   let fileInput: HTMLInputElement
-  let logUrl = $state('')
+  let logUrl = $state(_q.get('url') ?? '')
+
+  onMount(() => {
+    const initialUrl = _q.get('url')
+    if (initialUrl) loadUrl(initialUrl)
+  })
   let playing = $state(false)
   let playInterval: ReturnType<typeof setInterval> | null = null
   let showConfig = $state(false)
