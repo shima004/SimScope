@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: simscope
-          image: shimapaca/simscope:latest
+          image: ghcr.io/shima004/simscope:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
