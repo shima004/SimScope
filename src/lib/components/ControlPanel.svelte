@@ -116,7 +116,7 @@
         onclick={() => fileInput.click()}
         disabled={$loading}
       >
-        {$loading ? 'Loading…' : 'Open .log'}
+        {$loading ? 'Loading…' : 'Open 7z log'}
       </button>
       <input
         bind:this={fileInput}
