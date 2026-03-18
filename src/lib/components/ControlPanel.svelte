@@ -8,8 +8,8 @@
     followMode,
     kernelConfig,
     loadFile,
-    loadUrl,
     loading,
+    loadUrl,
     maxStep,
     mode,
     seekToStep,
@@ -118,7 +118,7 @@
         onclick={() => fileInput.click()}
         disabled={$loading}
       >
-        {$loading ? 'Loading…' : 'Open .7z'}
+        {$loading ? 'Loading…' : 'Open 7z tgz tar.gz log file'}
       </button>
       <input
         bind:this={fileInput}
@@ -128,7 +128,7 @@
         onchange={handleFileChange}
       />
     </div>
-    <div class="row">
+    <div class="row" style="margin-top: 8px;">
       <input
         class="url-input"
         bind:value={logUrl}
