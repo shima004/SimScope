@@ -26,9 +26,15 @@
   let fileInput: HTMLInputElement
   let logUrl = $state(_q.get('url') ?? '')
 
-  onMount(() => {
+  onMount(async () => {
     const initialUrl = _q.get('url')
-    if (initialUrl) loadUrl(initialUrl)
+    const hasServer = _q.has('host') || _q.has('port')
+    if (initialUrl) {
+      const result = await loadUrl(initialUrl)
+      if (result === 'not_found' && hasServer) connectWS(wsUrl)
+    } else if (hasServer) {
+      connectWS(wsUrl)
+    }
   })
   let playing = $state(false)
   let playInterval: ReturnType<typeof setInterval> | null = null

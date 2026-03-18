@@ -216,19 +216,24 @@ export async function loadFile(file: File) {
   }
 }
 
-export async function loadUrl(url: string) {
+export async function loadUrl(url: string): Promise<'ok' | 'not_found' | 'error'> {
   loading.set(true);
   errorMsg.set(null);
   mode.set("file");
   reset();
   try {
+    const head = await fetch(url, { method: 'HEAD' });
+    if (head.status === 404) { mode.set("idle"); return 'not_found'; }
+    if (!head.ok) throw new Error(`HTTP ${head.status}`);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const filename = url.split('/').pop()?.split('?')[0] ?? 'archive.7z';
     await loadRaw(await res.arrayBuffer(), filename);
+    return 'ok';
   } catch (e) {
     errorMsg.set(`Failed to load URL: ${e}`);
     mode.set("idle");
+    return 'error';
   } finally {
     loading.set(false);
   }
