@@ -4,6 +4,17 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "src/**"
+      - "static/**"
+      - "proto/**"
+      - "server.js"
+      - "rcrsProxy.js"
+      - "Dockerfile"
+      - "package*.json"
+      - "svelte.config.*"
+      - "vite.config.*"
+      - "tsconfig.json"
 
 env:
   REGISTRY: ghcr.io
