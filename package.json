@@ -11,6 +11,9 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"docker:build": "docker build -t shimapaca/simscope .",
+		"docker:run": "docker run --rm -p 3000:3000 shimapaca/simscope",
+		"docker:publish": "docker build -t shimapaca/simscope . && docker push shimapaca/simscope",
 		"proto": "protoc --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=src/lib/proto --ts_proto_opt=esModuleInterop=true,outputEncodeMethods=true,outputJsonMethods=false,useOptionals=messages --proto_path=proto proto/RCRSProto.proto proto/RCRSLogProto.proto"
 	},
 	"devDependencies": {
