@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN npm run prepare && npm run build
 
 # Stage 2: runtime
 FROM node:22-alpine AS runner
@@ -17,7 +17,7 @@ ENV PORT=3000
 
 # Copy only what's needed at runtime
 COPY --from=builder /app/package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/server.js ./
