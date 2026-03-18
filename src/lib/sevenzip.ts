@@ -49,20 +49,45 @@ function cleanupDir(sz: SevenZipModule, dir: string) {
 }
 
 /**
- * Extract a .7z archive and return all contained files as a path → bytes map.
+ * Extract an archive and return all contained files as a path → bytes map.
  * Paths are relative (e.g. "INITIAL_CONDITIONS", "1/UPDATES").
  * Windows Zone.Identifier alternate data stream files are excluded.
+ * Supports .7z, .tgz, .tar.gz formats.
  */
-export async function extract7zAllFiles(buffer: ArrayBuffer): Promise<Map<string, Uint8Array>> {
+export async function extract7zAllFiles(buffer: ArrayBuffer, filename = 'archive.7z'): Promise<Map<string, Uint8Array>> {
   const sz = await getModule()
   const id = ++extractCounter
-  const inPath = `/in_${id}.7z`
+
+  // Normalise .tar.gz → .tgz so the extension is a single token
+  const ext = filename.endsWith('.tar.gz') ? '.tgz' : filename.slice(filename.lastIndexOf('.'))
+  const inPath = `/in_${id}${ext}`
   const outDir = `/out_${id}`
 
   sz.FS.writeFile(inPath, new Uint8Array(buffer))
   sz.FS.mkdir(outDir)
-
   sz.callMain(['x', inPath, `-o${outDir}`, '-y'])
+
+  // .tgz extracts to a single .tar file — run a second pass to expand it
+  if (ext === '.tgz') {
+    const entries = sz.FS.readdir(outDir).filter((n: string) => n !== '.' && n !== '..')
+    const tarName = entries.find((n: string) => n.endsWith('.tar'))
+    if (tarName) {
+      const tarPath = `${outDir}/${tarName}`
+      const tarOutDir = `/out_${id}_tar`
+      sz.FS.mkdir(tarOutDir)
+      sz.callMain(['x', tarPath, `-o${tarOutDir}`, '-y'])
+      sz.FS.unlink(tarPath)
+
+      const result = new Map<string, Uint8Array>()
+      collectAllFiles(sz, tarOutDir, '', result)
+      cleanupDir(sz, tarOutDir)
+      sz.FS.rmdir(tarOutDir)
+      cleanupDir(sz, outDir)
+      sz.FS.rmdir(outDir)
+      sz.FS.unlink(inPath)
+      return result
+    }
+  }
 
   const result = new Map<string, Uint8Array>()
   collectAllFiles(sz, outDir, '', result)

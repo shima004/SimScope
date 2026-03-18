@@ -8,6 +8,7 @@
     followMode,
     kernelConfig,
     loadFile,
+    loadUrl,
     loading,
     maxStep,
     mode,
@@ -21,6 +22,7 @@
     `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost:5173'}/proxy?host=${tcpHost}&port=${tcpPort}`
   )
   let fileInput: HTMLInputElement
+  let logUrl = $state('')
   let playing = $state(false)
   let playInterval: ReturnType<typeof setInterval> | null = null
   let showConfig = $state(false)
@@ -116,15 +118,28 @@
         onclick={() => fileInput.click()}
         disabled={$loading}
       >
-        {$loading ? 'Loading…' : 'Open 7z log'}
+        {$loading ? 'Loading…' : 'Open .7z'}
       </button>
       <input
         bind:this={fileInput}
         type="file"
-        accept=".7z"
+        accept=".7z,.tgz,.tar.gz"
         style="display:none"
         onchange={handleFileChange}
       />
+    </div>
+    <div class="row">
+      <input
+        class="url-input"
+        bind:value={logUrl}
+        placeholder="https://example.com/log.7z"
+        disabled={$loading}
+      />
+      <button
+        class="btn primary"
+        onclick={() => loadUrl(logUrl)}
+        disabled={$loading || !logUrl}
+      >Load</button>
     </div>
   </section>
 

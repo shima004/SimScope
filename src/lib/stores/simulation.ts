@@ -148,66 +148,86 @@ export function disconnectWS() {
 
 // ── File loading ──────────────────────────────────────────────────────────────
 
+async function loadRaw(raw: ArrayBuffer, filename = 'archive.7z') {
+  const files = await extract7zAllFiles(raw, filename);
+
+  // INITIAL_CONDITIONS may be at top level or inside a subdirectory (e.g. rescue.log/)
+  const configKey = Array.from(files.keys()).find((k) => k.endsWith("CONFIG"));
+  if (configKey) {
+    handleLogFrame(LogProtoCodec.decode(files.get(configKey)!));
+  }
+
+  const initialKey = Array.from(files.keys()).find((k) =>
+    k.endsWith("INITIAL_CONDITIONS"),
+  );
+  if (initialKey) {
+    handleLogFrame(LogProtoCodec.decode(files.get(initialKey)!));
+  }
+
+  // Collect all N/UPDATES and N/COMMANDS entries and process in numeric order
+  function collectStepFiles(suffix: string) {
+    return Array.from(files.keys())
+      .filter((k) => k.endsWith(suffix))
+      .map((k) => {
+        const parts = k.split("/");
+        const step = parseInt(parts[parts.length - 2], 10);
+        return { step, key: k };
+      })
+      .filter(({ step }) => !isNaN(step))
+      .sort((a, b) => a.step - b.step);
+  }
+
+  for (const { key } of collectStepFiles("/UPDATES")) {
+    handleLogFrame(LogProtoCodec.decode(files.get(key)!));
+  }
+
+  for (const { key } of collectStepFiles("/COMMANDS")) {
+    handleLogFrame(LogProtoCodec.decode(files.get(key)!));
+  }
+
+  // ステップ1のスナップショットから瓦礫の初期 repairCost 合計を計算
+  const step1 = new Map<number, SimEntity>(
+    Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }])
+  );
+  const step1changes = timeline.get(1);
+  if (step1changes) applyChanges(step1, step1changes);
+  let totalCost = 0;
+  for (const e of step1.values()) {
+    if ('repairCost' in e) totalCost += (e as { repairCost: number }).repairCost;
+  }
+  initialBlockadeCost.set(totalCost);
+
+  currentStep.set(0);
+  rebuildState(0);
+}
+
 export async function loadFile(file: File) {
   loading.set(true);
   errorMsg.set(null);
   mode.set("file");
   reset();
-
   try {
-    const raw = await file.arrayBuffer();
-    const files = await extract7zAllFiles(raw);
-
-    // INITIAL_CONDITIONS may be at top level or inside a subdirectory (e.g. rescue.log/)
-    const configKey = Array.from(files.keys()).find((k) => k.endsWith("CONFIG"));
-    if (configKey) {
-      handleLogFrame(LogProtoCodec.decode(files.get(configKey)!));
-    }
-
-    const initialKey = Array.from(files.keys()).find((k) =>
-      k.endsWith("INITIAL_CONDITIONS"),
-    );
-    if (initialKey) {
-      handleLogFrame(LogProtoCodec.decode(files.get(initialKey)!));
-    }
-
-    // Collect all N/UPDATES and N/COMMANDS entries and process in numeric order
-    function collectStepFiles(suffix: string) {
-      return Array.from(files.keys())
-        .filter((k) => k.endsWith(suffix))
-        .map((k) => {
-          const parts = k.split("/");
-          const step = parseInt(parts[parts.length - 2], 10);
-          return { step, key: k };
-        })
-        .filter(({ step }) => !isNaN(step))
-        .sort((a, b) => a.step - b.step);
-    }
-
-    for (const { key } of collectStepFiles("/UPDATES")) {
-      handleLogFrame(LogProtoCodec.decode(files.get(key)!));
-    }
-
-    for (const { key } of collectStepFiles("/COMMANDS")) {
-      handleLogFrame(LogProtoCodec.decode(files.get(key)!));
-    }
-
-    // ステップ1のスナップショットから瓦礫の初期 repairCost 合計を計算
-    const step1 = new Map<number, SimEntity>(
-      Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }])
-    );
-    const step1changes = timeline.get(1);
-    if (step1changes) applyChanges(step1, step1changes);
-    let totalCost = 0;
-    for (const e of step1.values()) {
-      if ('repairCost' in e) totalCost += (e as { repairCost: number }).repairCost;
-    }
-    initialBlockadeCost.set(totalCost);
-
-    currentStep.set(0);
-    rebuildState(0);
+    await loadRaw(await file.arrayBuffer(), file.name);
   } catch (e) {
     errorMsg.set(`Failed to parse log file: ${e}`);
+    mode.set("idle");
+  } finally {
+    loading.set(false);
+  }
+}
+
+export async function loadUrl(url: string) {
+  loading.set(true);
+  errorMsg.set(null);
+  mode.set("file");
+  reset();
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const filename = url.split('/').pop()?.split('?')[0] ?? 'archive.7z';
+    await loadRaw(await res.arrayBuffer(), filename);
+  } catch (e) {
+    errorMsg.set(`Failed to load URL: ${e}`);
     mode.set("idle");
   } finally {
     loading.set(false);
