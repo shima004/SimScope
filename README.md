@@ -1,42 +1,69 @@
-# sv
+# SimScope
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+RoboCup Rescue Simulation (RCRS) のビジュアライザです。カーネルにリアルタイム接続してシミュレーションを観察したり、ログファイルを再生したりできます。
 
-## Creating a project
+## 使い方
 
-If you're seeing this, you've probably already done this step. Congrats!
+### Docker（推奨）
 
 ```sh
-# create a new project
-npx sv create my-app
+docker run --rm -p 3000:3000 ghcr.io/shima004/simscope:latest
 ```
 
-To recreate this project with the same configuration:
+ブラウザで <http://localhost:3000> を開いてください。
+
+### ソースから起動
 
 ```sh
-# recreate this project
-npx sv@0.12.7 create --template minimal --types ts --install npm .
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
+npm install
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-## Building
+---
 
-To create a production version of your app:
+## 接続方法
+
+### リアルタイム接続（カーネルが起動中の場合）
+
+1. 左上パネルの **TCP Server** にカーネルのホストとポートを入力
+   - デフォルト: `localhost` / `27931`
+2. **Connect** ボタンをクリック
+3. `● Connected` と表示されたらシミュレーションが始まるのを待つ
+
+#### WSL2上でホストのカーネルに接続する場合
+
+起動時に`--add-host` オプションでホストマシンへのルートを追加します。
 
 ```sh
-npm run build
+docker run --rm -p 3000:3000 \
+  --add-host=host.docker.internal:host-gateway \
+  ghcr.io/shima004/simscope:latest
 ```
 
-You can preview the production build with `npm run preview`.
+ControlPanelの接続先を以下のように入力してください。
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+- Host: `host.docker.internal`
+- Port: `27931`
+
+### ログファイルの再生
+
+1. **Open 7z log** ボタンをクリック
+2. `.7z` 形式のログファイルを選択
+3. 読み込み後、スライダーやボタンで再生操作
+
+| ボタン     | 動作                |
+| ---------- | ------------------- |
+| Play/Pause | 自動再生 / 一時停止 |
+| Prev       | 1ステップ戻る       |
+| Next       | 1ステップ進む       |
+
+---
+
+## 画面の見方
+
+- **マップ** — 建物・道路・エージェントを地図上に表示
+- **InfoPanel** — 選択したエンティティの詳細情報
+- **CivilianStatusPanel** — 市民の生存・埋没状況
+- **InjuredCivilianPanel** — 各避難所の負傷者数
+- **ScorePanel** — 瓦礫修理コスト・市民スコア
+- **Follow ON/OFF** — 選択中のエージェントにカメラを追従
