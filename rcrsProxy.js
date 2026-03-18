@@ -108,7 +108,7 @@ export function handleRcrsViewer(ws, tcpHost, tcpPort) {
   });
 
   tcp.on("error", (err) => {
-    console.error("[proxy] TCP error:", err.message);
+    console.error(`[proxy] TCP error: ${err.code ?? ""} ${err.message ?? ""} (${tcpHost}:${tcpPort})`);
     ws.close();
   });
 
