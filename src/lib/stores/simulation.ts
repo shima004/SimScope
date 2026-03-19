@@ -72,6 +72,8 @@ export const focusPoint = writable<{ x: number; y: number } | null>(null)
 export const followMode = writable(false)
 /** agentId → AgentAction (current timestep only) */
 export const agentActions = writable<Map<number, AgentAction>>(new Map())
+/** 通信可視化で非表示にするチャンネル番号のセット */
+export const hiddenChannels = writable<Set<number>>(new Set())
 /** 初期ステップの瓦礫 repairCost 合計（除去率計算用） */
 export const initialBlockadeCost = writable(0)
 

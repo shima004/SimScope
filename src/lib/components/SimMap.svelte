@@ -2,7 +2,7 @@
   import type { BlockadeEntity, BuildingEntity, HumanEntity, RoadEntity, SimEntity } from '$lib/rcrs/types';
   import { CommandURN, EntityURN, isAgent, isBuilding } from '$lib/rcrs/urns';
   import type { AgentAction, CommMessage } from '$lib/stores/simulation';
-  import { agentActions, agentReceivedComms, agentVisibleIds, entities, focusPoint, followMode, kernelConfig, selectedId } from '$lib/stores/simulation';
+  import { agentActions, agentReceivedComms, agentVisibleIds, entities, focusPoint, followMode, hiddenChannels, kernelConfig, selectedId } from '$lib/stores/simulation';
   import { channelColorRGB } from '$lib/rcrs/channelColors';
   import type { OrthographicViewState, PickingInfo } from '@deck.gl/core';
   import { Deck, OrthographicView } from '@deck.gl/core';
@@ -66,7 +66,11 @@
     cfg: Record<string, string>,
     perceivedIds: Set<number> | null,
     comms: CommMessage[] | null,
+    hiddenChs: Set<number>,
   ) {
+    const filteredComms = hiddenChs.size > 0 && comms
+      ? comms.filter(c => !hiddenChs.has(c.channel))
+      : comms
     const roads:     RoadEntity[]     = []
     const buildings: BuildingEntity[] = []
     const blockades: BlockadeEntity[] = []
@@ -239,13 +243,13 @@
 
       // 通信: 選択エージェント → 送信元エージェントへの線
       ...((): (LineLayer<unknown> | ScatterplotLayer<unknown>)[] => {
-        if (!comms || !selId) return []
+        if (!filteredComms?.length || !selId) return []
         const sel = emap.get(selId) as HumanEntity | undefined
         if (!sel || !isAgent(sel.urn)) return []
 
         // 送信元ごとに最小チャンネルを決定
         const senderChMap = new Map<number, number>()
-        for (const c of comms) {
+        for (const c of filteredComms) {
           const cur = senderChMap.get(c.senderId)
           if (cur === undefined || c.channel < cur) senderChMap.set(c.senderId, c.channel)
         }
@@ -273,7 +277,7 @@
             getWidth: 300,
             widthMinPixels: 1,
             widthMaxPixels: 3,
-            updateTriggers: { getColor: [comms] },
+            updateTriggers: { getColor: [filteredComms] },
           }),
           new ScatterplotLayer<SenderEntry>({
             id: 'comm-senders',
@@ -289,7 +293,7 @@
             lineWidthMinPixels: 2,
             lineWidthMaxPixels: 4,
             pickable: false,
-            updateTriggers: { getLineColor: [comms] },
+            updateTriggers: { getLineColor: [filteredComms] },
           }),
         ]
       })(),
@@ -365,7 +369,7 @@
   const unsubEntities = entities.subscribe((emap) => {
     if (!deck) return
     const selId = $selectedId
-    deck.setProps({ layers: buildLayers(emap, selId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms) })
+    deck.setProps({ layers: buildLayers(emap, selId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
     if (prevSize === 0 && emap.size > 0) fitViewport(emap)
     prevSize = emap.size
     followAgent(emap, selId)
@@ -373,23 +377,28 @@
 
   const unsubSel = selectedId.subscribe((selId) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, selId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms) })
+    deck.setProps({ layers: buildLayers($entities, selId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
     followAgent($entities, selId)
   })
 
   const unsubActions = agentActions.subscribe((actions) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, $selectedId, actions, $kernelConfig, $agentVisibleIds, $agentReceivedComms) })
+    deck.setProps({ layers: buildLayers($entities, $selectedId, actions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
   })
 
   const unsubPerception = agentVisibleIds.subscribe((perceivedIds) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, $selectedId, $agentActions, $kernelConfig, perceivedIds, $agentReceivedComms) })
+    deck.setProps({ layers: buildLayers($entities, $selectedId, $agentActions, $kernelConfig, perceivedIds, $agentReceivedComms, $hiddenChannels) })
   })
 
   const unsubComms = agentReceivedComms.subscribe((comms) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, comms) })
+    deck.setProps({ layers: buildLayers($entities, $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, comms, $hiddenChannels) })
+  })
+
+  const unsubHidden = hiddenChannels.subscribe((hiddenChs) => {
+    if (!deck) return
+    deck.setProps({ layers: buildLayers($entities, $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, hiddenChs) })
   })
 
   const unsubFocus = focusPoint.subscribe((pt) => {
@@ -431,6 +440,7 @@
     unsubFocus()
     unsubPerception()
     unsubComms()
+    unsubHidden()
     deck?.finalize()
   })
 </script>

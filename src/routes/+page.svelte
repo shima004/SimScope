@@ -5,6 +5,7 @@
   import CivilianStatusPanel from '$lib/components/CivilianStatusPanel.svelte'
   import InjuredCivilianPanel from '$lib/components/InjuredCivilianPanel.svelte'
   import ScorePanel from '$lib/components/ScorePanel.svelte'
+  import ChannelFilterPanel from '$lib/components/ChannelFilterPanel.svelte'
 </script>
 
 <div class="app">
@@ -12,6 +13,7 @@
   <div class="left-col">
     <ControlPanel />
     <ScorePanel />
+    <ChannelFilterPanel />
   </div>
   <InfoPanel />
   <CivilianStatusPanel />
