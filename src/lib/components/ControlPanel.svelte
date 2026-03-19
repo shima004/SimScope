@@ -39,6 +39,27 @@
   let playing = $state(false)
   let playInterval: ReturnType<typeof setInterval> | null = null
   let showConfig = $state(false)
+  let openGroups = $state<Set<string>>(new Set())
+
+  const configGroups = $derived.by(() => {
+    const map = new Map<string, { subkey: string; value: string }[]>()
+    for (const [k, v] of Object.entries($kernelConfig).sort()) {
+      const dot = k.indexOf('.')
+      const prefix = dot >= 0 ? k.slice(0, dot) : k
+      const sub    = dot >= 0 ? k.slice(dot + 1) : ''
+      if (!map.has(prefix)) map.set(prefix, [])
+      map.get(prefix)!.push({ subkey: sub, value: v })
+    }
+    return map
+  })
+
+  function toggleGroup(g: string) {
+    openGroups = new Set(
+      openGroups.has(g)
+        ? [...openGroups].filter(x => x !== g)
+        : [...openGroups, g]
+    )
+  }
 
   function handleConnect() {
     connectWS(wsUrl)
@@ -213,10 +234,24 @@
         <button class="close-btn" onclick={() => showConfig = false}>✕</button>
       </div>
       <div class="config-table">
-        {#each Object.entries($kernelConfig).sort() as [k, v]}
-          <div class="config-row">
-            <span class="config-key" title={k}>{k}</span>
-            <span class="config-val">{v}</span>
+        {#each configGroups as [group, entries]}
+          {@const open = openGroups.has(group)}
+          <div class="config-group">
+            <button class="group-header" onclick={() => toggleGroup(group)}>
+              <span class="group-arrow">{open ? '▾' : '▸'}</span>
+              <span class="group-name">{group}</span>
+              <span class="group-count">{entries.length}</span>
+            </button>
+            {#if open}
+              <div class="group-body">
+                {#each entries as { subkey, value }}
+                  <div class="config-row">
+                    <span class="config-key" title={subkey}>{subkey || '(value)'}</span>
+                    <span class="config-val">{value}</span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
         {/each}
       </div>
@@ -429,12 +464,59 @@
     overflow-y: auto;
   }
 
+  .config-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 180, 255, 0.06);
+    border: none;
+    border-radius: 4px;
+    padding: 5px 8px;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+  .group-header:hover { background: rgba(0, 180, 255, 0.12); }
+
+  .group-arrow {
+    font-size: 10px;
+    color: #00c8ff;
+    width: 10px;
+    flex-shrink: 0;
+  }
+
+  .group-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: #00c8ff;
+    flex: 1;
+  }
+
+  .group-count {
+    font-size: 10px;
+    color: #405060;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .group-body {
+    display: flex;
+    flex-direction: column;
+    padding: 2px 0 4px 16px;
+    border-left: 1px solid rgba(0, 200, 255, 0.1);
+    margin-left: 12px;
+  }
+
   .config-row {
     display: flex;
     justify-content: space-between;
     gap: 12px;
     font-size: 11px;
-    padding: 3px 0;
+    padding: 2px 0;
     border-bottom: 1px solid rgba(255,255,255,0.04);
     line-height: 1.4;
   }
