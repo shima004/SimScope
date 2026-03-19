@@ -1,11 +1,11 @@
 <script lang="ts">
   import type { BlockadeEntity, BuildingEntity, HumanEntity, RoadEntity, SimEntity } from '$lib/rcrs/types';
   import { CommandURN, EntityURN, isAgent, isBuilding } from '$lib/rcrs/urns';
-  import type { AgentAction } from '$lib/stores/simulation';
-  import { agentActions, entities, focusPoint, followMode, kernelConfig, selectedId } from '$lib/stores/simulation';
+  import type { AgentAction, CommMessage } from '$lib/stores/simulation';
+  import { agentActions, agentReceivedComms, agentVisibleIds, entities, focusPoint, followMode, kernelConfig, selectedId } from '$lib/stores/simulation';
   import type { OrthographicViewState, PickingInfo } from '@deck.gl/core';
   import { Deck, OrthographicView } from '@deck.gl/core';
-  import { PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
+  import { LineLayer, PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
   import { onDestroy, onMount } from 'svelte';
 
   let canvas: HTMLCanvasElement
@@ -63,6 +63,8 @@
     selId: number | null,
     actions: Map<number, AgentAction>,
     cfg: Record<string, string>,
+    perceivedIds: Set<number> | null,
+    comms: CommMessage[] | null,
   ) {
     const roads:     RoadEntity[]     = []
     const buildings: BuildingEntity[] = []
@@ -142,15 +144,22 @@
         id: 'buildings',
         data: buildings,
         getPolygon: (d: BuildingEntity) => d.apexes,
-        getFillColor: (d: BuildingEntity) => buildingColor(d),
+        getFillColor: (d: BuildingEntity) => {
+          const [r, g, b, a] = buildingColor(d)
+          if (perceivedIds && !perceivedIds.has(d.id)) return [r, g, b, Math.round(a * 0.2)]
+          return [r, g, b, a]
+        },
         getLineColor: (d: BuildingEntity) =>
-          d.id === selId ? [0, 220, 255, 255] : [100, 120, 160, 180],
-        lineWidthMinPixels: 0.5,
+          d.id === selId              ? [0, 220, 255, 255] :
+          perceivedIds?.has(d.id)     ? [0, 200, 180, 200] :
+          perceivedIds                ? [100, 120, 160, 50] :
+                                        [100, 120, 160, 180],
+        lineWidthMinPixels: 1.5,
         pickable: true,
         onClick: (info: PickingInfo) => selectedId.set((info.object as BuildingEntity)?.id ?? null),
         updateTriggers: {
-          getFillColor: buildings.map(b => b.fieryness * 100 + b.brokenness),
-          getLineColor: [selId],
+          getFillColor: [buildings.map(b => b.fieryness * 100 + b.brokenness), perceivedIds],
+          getLineColor: [selId, perceivedIds],
         },
       }),
 
@@ -158,29 +167,36 @@
         id: 'blockades',
         data: blockades,
         getPolygon: (d: BlockadeEntity) => d.apexes,
-        getFillColor: [200, 160, 40, 200],
+        getFillColor: (d: BlockadeEntity) =>
+          perceivedIds && !perceivedIds.has(d.id) ? [200, 160, 40, 40] : [200, 160, 40, 200],
         getLineColor: (d: BlockadeEntity) =>
-          d.id === selId          ? [0,   220, 255, 255] :
-          clearingTargets.has(d.id) ? [255, 80,  200, 255] :  // クリア対象: マゼンタ
-                                    [240, 200, 60,  255],
+          d.id === selId              ? [0,   220, 255, 255] :
+          perceivedIds?.has(d.id)     ? [0,   200, 180, 220] :
+          clearingTargets.has(d.id)   ? [255, 80,  200, 255] :
+          perceivedIds                ? [240, 200, 60,  60] :
+                                        [240, 200, 60,  255],
         lineWidthMinPixels: 1,
         lineWidthMaxPixels: 4,
         pickable: true,
         onClick: (info: PickingInfo) => selectedId.set((info.object as BlockadeEntity)?.id ?? null),
-        updateTriggers: { getLineColor: [selId, clearingTargets] },
+        updateTriggers: { getFillColor: [perceivedIds], getLineColor: [selId, clearingTargets, perceivedIds] },
       }),
 
       new ScatterplotLayer({
         id: 'agents',
         data: visibleAgents,
         getPosition: (d: HumanEntity) => [d.x, d.y],
-        getFillColor: (d: HumanEntity) => agentColor(d.urn, actions.get(d.id), carrierMap.has(d.id), d.hp),
+        getFillColor: (d: HumanEntity) => {
+          const [r, g, b, a] = agentColor(d.urn, actions.get(d.id), carrierMap.has(d.id), d.hp)
+          if (perceivedIds && !perceivedIds.has(d.id) && d.id !== selId) return [r, g, b, 40]
+          return [r, g, b, a]
+        },
         getRadius: (d: HumanEntity) => d.id === selId ? 800 : 500,
         radiusMinPixels: 3,
         radiusMaxPixels: 12,
         pickable: true,
         onClick: (info: PickingInfo) => selectedId.set((info.object as HumanEntity)?.id ?? null),
-        updateTriggers: { getRadius: [selId], getFillColor: [actions] },
+        updateTriggers: { getRadius: [selId], getFillColor: [actions, perceivedIds] },
       }),
 
       // 搬送中の市民インジケータ（救急隊の上に重ねる小さな緑ドット）
@@ -219,6 +235,59 @@
         widthMaxPixels: 4,
         updateTriggers: { getColor: [selId], getWidth: [selId] },
       }),
+
+      // 通信: 選択エージェント → 送信元エージェントへの線
+      ...((): (LineLayer<unknown> | ScatterplotLayer<unknown>)[] => {
+        if (!comms || !selId) return []
+        const sel = emap.get(selId) as HumanEntity | undefined
+        if (!sel || !isAgent(sel.urn)) return []
+
+        // 送信元エージェントのIDセット（重複除去）
+        const senderIds = new Set(comms.map(c => c.senderId))
+
+        // ライン data: {source, target} のみ有効な座標を持つエントリ
+        type LineEntry = { source: [number, number]; target: [number, number] }
+        const lineData: LineEntry[] = []
+        for (const sid of senderIds) {
+          const sender = emap.get(sid) as HumanEntity | undefined
+          if (!sender || !isAgent(sender.urn)) continue
+          if (sender.x === 0 && sender.y === 0) continue
+          lineData.push({ source: [sel.x, sel.y], target: [sender.x, sender.y] })
+        }
+
+        // 送信元エージェントのスキャッタープロット（リングハイライト）
+        const senderAgents = Array.from(senderIds)
+          .map(id => emap.get(id))
+          .filter((e): e is HumanEntity => !!e && isAgent(e.urn) && (e.x !== 0 || e.y !== 0))
+
+        return [
+          new LineLayer<LineEntry>({
+            id: 'comm-lines',
+            data: lineData,
+            getSourcePosition: d => d.source,
+            getTargetPosition: d => d.target,
+            getColor: [255, 220, 50, 180],
+            getWidth: 300,
+            widthMinPixels: 1,
+            widthMaxPixels: 3,
+          }),
+          new ScatterplotLayer<HumanEntity>({
+            id: 'comm-senders',
+            data: senderAgents,
+            getPosition: d => [d.x, d.y],
+            getFillColor: [0, 0, 0, 0],
+            getLineColor: [255, 220, 50, 255],
+            getRadius: 900,
+            radiusMinPixels: 5,
+            radiusMaxPixels: 16,
+            stroked: true,
+            filled: false,
+            lineWidthMinPixels: 2,
+            lineWidthMaxPixels: 4,
+            pickable: false,
+          }),
+        ]
+      })(),
 
       // AK_CLEAR_AREA: 矩形範囲
       new PolygonLayer({
@@ -291,7 +360,7 @@
   const unsubEntities = entities.subscribe((emap) => {
     if (!deck) return
     const selId = $selectedId
-    deck.setProps({ layers: buildLayers(emap, selId, $agentActions, $kernelConfig) })
+    deck.setProps({ layers: buildLayers(emap, selId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms) })
     if (prevSize === 0 && emap.size > 0) fitViewport(emap)
     prevSize = emap.size
     followAgent(emap, selId)
@@ -299,13 +368,23 @@
 
   const unsubSel = selectedId.subscribe((selId) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, selId, $agentActions, $kernelConfig) })
+    deck.setProps({ layers: buildLayers($entities, selId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms) })
     followAgent($entities, selId)
   })
 
   const unsubActions = agentActions.subscribe((actions) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, $selectedId, actions, $kernelConfig) })
+    deck.setProps({ layers: buildLayers($entities, $selectedId, actions, $kernelConfig, $agentVisibleIds, $agentReceivedComms) })
+  })
+
+  const unsubPerception = agentVisibleIds.subscribe((perceivedIds) => {
+    if (!deck) return
+    deck.setProps({ layers: buildLayers($entities, $selectedId, $agentActions, $kernelConfig, perceivedIds, $agentReceivedComms) })
+  })
+
+  const unsubComms = agentReceivedComms.subscribe((comms) => {
+    if (!deck) return
+    deck.setProps({ layers: buildLayers($entities, $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, comms) })
   })
 
   const unsubFocus = focusPoint.subscribe((pt) => {
@@ -345,6 +424,8 @@
     unsubSel()
     unsubActions()
     unsubFocus()
+    unsubPerception()
+    unsubComms()
     deck?.finalize()
   })
 </script>

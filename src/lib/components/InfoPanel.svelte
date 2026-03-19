@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { entities, selectedEntity, selectedId } from '$lib/stores/simulation'
-  import { EntityURNLabel, FIERYNESS_LABEL, EntityURN, entityColor } from '$lib/rcrs/urns'
+  import { agentReceivedComms, entities, selectedEntity, selectedId } from '$lib/stores/simulation'
+  import { EntityURNLabel, FIERYNESS_LABEL, EntityURN, entityColor, isAgent } from '$lib/rcrs/urns'
   import type { BuildingEntity, RefugeEntity, HumanEntity, BlockadeEntity, FireBrigadeEntity, AreaEntity } from '$lib/rcrs/types'
 
   function close() {
@@ -166,6 +166,28 @@
           <span class="val">#{bl.position}</span>
         </div>
       {/if}
+
+      <!-- Received communications (file mode, agent only) -->
+      {#if isAgent(e.urn) && $agentReceivedComms}
+        <div class="section-label">Communications ({$agentReceivedComms.length})</div>
+        <div class="comm-list">
+          {#each $agentReceivedComms as msg}
+            {@const sender = $entities.get(msg.senderId)}
+            <div class="comm-entry">
+              <div class="comm-header">
+                <span class="comm-type">{EntityURNLabel[sender?.urn ?? 0] ?? 'Unknown'}</span>
+                <button class="comm-id" onclick={() => selectedId.set(msg.senderId)}>
+                  #{msg.senderId}
+                </button>
+                <span class="comm-ch">ch.{msg.channel}</span>
+              </div>
+              {#if msg.text}
+                <div class="comm-text">"{msg.text}"</div>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
   </aside>
 {/if}
@@ -283,6 +305,64 @@
     align-self: flex-start;
   }
   .select-btn:hover { background: rgba(255, 200, 60, 0.1); }
+
+  .comm-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+
+  .comm-entry {
+    background: rgba(255, 220, 50, 0.06);
+    border: 1px solid rgba(255, 220, 50, 0.15);
+    border-radius: 4px;
+    padding: 5px 7px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .comm-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .comm-type {
+    font-size: 10px;
+    color: #ffc840;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+  }
+
+  .comm-id {
+    background: none;
+    border: none;
+    color: #80b0c8;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+    flex: 1;
+    text-align: left;
+  }
+  .comm-id:hover { color: #00c8ff; text-decoration: underline; }
+
+  .comm-ch {
+    font-size: 10px;
+    color: #507080;
+    flex-shrink: 0;
+  }
+
+  .comm-text {
+    font-size: 11px;
+    color: #c8d8e8;
+    font-style: italic;
+    padding-left: 2px;
+  }
 
   .fiery-0 { color: #80c0a0; }
   .fiery-1 { color: #ffc040; }

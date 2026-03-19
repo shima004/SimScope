@@ -36,6 +36,24 @@ let timeline: Map<number, ChangeSetProto> = new Map();
  */
 let commandTimeline: Map<number, Map<number, AgentAction>> = new Map();
 
+/**
+ * Per-timestep perception data — only populated in file mode.
+ * Maps step → (agentId → visible entity ID array)
+ */
+let perceptionTimeline: Map<number, Map<number, number[]>> = new Map();
+
+/**
+ * Per-timestep communication data — only populated in file mode.
+ * Maps step → (agentId → received communication list)
+ */
+let commTimeline: Map<number, Map<number, CommMessage[]>> = new Map();
+
+export interface CommMessage {
+  senderId: number;
+  channel:  number;
+  text:     string; // UTF-8 decoded rawData (不明なバイト列は hex 文字列)
+}
+
 export interface AgentAction {
   urn:     number
   target?: number   // AK_CLEAR: 対象ブロッケード entity ID
@@ -62,6 +80,40 @@ export const selectedEntity = derived(
   ([$entities, $selectedId]) =>
     $selectedId !== null ? ($entities.get($selectedId) ?? null) : null,
 );
+
+/**
+ * 選択中エージェントが現在ステップで知覚したエンティティIDのセット。
+ * ファイルモードかつ知覚データがある場合のみ非 null。
+ */
+export const agentVisibleIds = writable<Set<number> | null>(null);
+
+/**
+ * 選択中エージェントが現在ステップで受信した通信メッセージリスト。
+ * ファイルモードかつ通信データがある場合のみ非 null。
+ */
+export const agentReceivedComms = writable<CommMessage[] | null>(null);
+
+function updatePerceptionState(step: number, selId: number | null) {
+  if (selId === null) {
+    agentVisibleIds.set(null);
+    agentReceivedComms.set(null);
+    return;
+  }
+  const stepMap = perceptionTimeline.get(step);
+  if (!stepMap) {
+    agentVisibleIds.set(null);
+    agentReceivedComms.set(null);
+    return;
+  }
+  const ids = stepMap.get(selId);
+  agentVisibleIds.set(ids ? new Set(ids) : null);
+
+  const comms = commTimeline.get(step)?.get(selId) ?? null;
+  agentReceivedComms.set(comms?.length ? comms : null);
+}
+
+// selectedId が変化したときも知覚データを更新
+selectedId.subscribe(selId => updatePerceptionState(get(currentStep), selId));
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
@@ -185,6 +237,19 @@ async function loadRaw(raw: ArrayBuffer, filename = 'archive.7z') {
     handleLogFrame(LogProtoCodec.decode(files.get(key)!));
   }
 
+  // N/PERCEPTION/agentId 形式のファイルをすべてパース
+  // パスは "rescue.log/1/PERCEPTION/123" または "1/PERCEPTION/123" 両方に対応
+  for (const k of files.keys()) {
+    if (!k.includes('/PERCEPTION/')) continue;
+    const parts = k.split('/');
+    const percIdx = parts.indexOf('PERCEPTION');
+    if (percIdx < 1) continue;
+    const step    = parseInt(parts[percIdx - 1], 10);
+    const agentId = parseInt(parts[percIdx + 1], 10);
+    if (isNaN(step) || isNaN(agentId)) continue;
+    handleLogFrame(LogProtoCodec.decode(files.get(k)!));
+  }
+
   // ステップ1のスナップショットから瓦礫の初期 repairCost 合計を計算
   const step1 = new Map<number, SimEntity>(
     Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }])
@@ -245,6 +310,7 @@ export function seekToStep(step: number) {
   if (get(mode) !== "file") return;
   rebuildState(step);
   currentStep.set(step);
+  updatePerceptionState(step, get(selectedId));
 }
 
 function rebuildState(targetStep: number) {
@@ -296,6 +362,33 @@ function handleLogFrame(frame: LogProtoMsg) {
     commandTimeline.set(time, actionMap);
   }
 
+  if (frame.perception) {
+    const { time, entityID, visible, communications } = frame.perception;
+    if (visible && visible.changes.length > 0) {
+      if (!perceptionTimeline.has(time)) perceptionTimeline.set(time, new Map());
+      perceptionTimeline.get(time)!.set(entityID, visible.changes.map(c => c.entityID));
+    }
+    if (communications.length > 0) {
+      const msgs: CommMessage[] = [];
+      for (const msg of communications) {
+        const senderId = msg.components[ComponentControlMsgURN.AgentID]?.entityID;
+        if (senderId === undefined) continue;
+        const channel = msg.components[ComponentCommandURN.Channel]?.intValue ?? 0;
+        const rawData = msg.components[ComponentCommandURN.Message]?.rawData;
+        let text = '';
+        if (rawData?.length) {
+          try { text = new TextDecoder().decode(rawData); }
+          catch { text = Array.from(rawData).map(b => b.toString(16).padStart(2, '0')).join(''); }
+        }
+        msgs.push({ senderId, channel, text });
+      }
+      if (msgs.length > 0) {
+        if (!commTimeline.has(time)) commTimeline.set(time, new Map());
+        commTimeline.get(time)!.set(entityID, msgs);
+      }
+    }
+  }
+
   if (frame.update) {
     const { time, changes } = frame.update;
 
@@ -320,6 +413,8 @@ function reset() {
   baseEntities = new Map();
   timeline = new Map();
   commandTimeline = new Map();
+  perceptionTimeline = new Map();
+  commTimeline = new Map();
   entities.set(new Map());
   currentStep.set(0);
   maxStep.set(0);
@@ -327,4 +422,6 @@ function reset() {
   initialBlockadeCost.set(0);
   kernelConfig.set({});
   agentActions.set(new Map());
+  agentVisibleIds.set(null);
+  agentReceivedComms.set(null);
 }
