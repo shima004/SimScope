@@ -3,6 +3,7 @@
   import { CommandURN, EntityURN, isAgent, isBuilding } from '$lib/rcrs/urns';
   import type { AgentAction, CommMessage } from '$lib/stores/simulation';
   import { agentActions, agentReceivedComms, agentVisibleIds, entities, focusPoint, followMode, kernelConfig, selectedId } from '$lib/stores/simulation';
+  import { channelColorRGB } from '$lib/rcrs/channelColors';
   import type { OrthographicViewState, PickingInfo } from '@deck.gl/core';
   import { Deck, OrthographicView } from '@deck.gl/core';
   import { LineLayer, PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
@@ -242,23 +243,25 @@
         const sel = emap.get(selId) as HumanEntity | undefined
         if (!sel || !isAgent(sel.urn)) return []
 
-        // 送信元エージェントのIDセット（重複除去）
-        const senderIds = new Set(comms.map(c => c.senderId))
+        // 送信元ごとに最小チャンネルを決定
+        const senderChMap = new Map<number, number>()
+        for (const c of comms) {
+          const cur = senderChMap.get(c.senderId)
+          if (cur === undefined || c.channel < cur) senderChMap.set(c.senderId, c.channel)
+        }
 
-        // ライン data: {source, target} のみ有効な座標を持つエントリ
-        type LineEntry = { source: [number, number]; target: [number, number] }
+        type LineEntry = { source: [number, number]; target: [number, number]; ch: number }
+        type SenderEntry = { x: number; y: number; ch: number }
+
         const lineData: LineEntry[] = []
-        for (const sid of senderIds) {
+        const senderData: SenderEntry[] = []
+        for (const [sid, ch] of senderChMap) {
           const sender = emap.get(sid) as HumanEntity | undefined
           if (!sender || !isAgent(sender.urn)) continue
           if (sender.x === 0 && sender.y === 0) continue
-          lineData.push({ source: [sel.x, sel.y], target: [sender.x, sender.y] })
+          lineData.push({ source: [sel.x, sel.y], target: [sender.x, sender.y], ch })
+          senderData.push({ x: sender.x, y: sender.y, ch })
         }
-
-        // 送信元エージェントのスキャッタープロット（リングハイライト）
-        const senderAgents = Array.from(senderIds)
-          .map(id => emap.get(id))
-          .filter((e): e is HumanEntity => !!e && isAgent(e.urn) && (e.x !== 0 || e.y !== 0))
 
         return [
           new LineLayer<LineEntry>({
@@ -266,17 +269,18 @@
             data: lineData,
             getSourcePosition: d => d.source,
             getTargetPosition: d => d.target,
-            getColor: [255, 220, 50, 180],
+            getColor: d => [...channelColorRGB(d.ch), 180] as [number,number,number,number],
             getWidth: 300,
             widthMinPixels: 1,
             widthMaxPixels: 3,
+            updateTriggers: { getColor: [comms] },
           }),
-          new ScatterplotLayer<HumanEntity>({
+          new ScatterplotLayer<SenderEntry>({
             id: 'comm-senders',
-            data: senderAgents,
+            data: senderData,
             getPosition: d => [d.x, d.y],
             getFillColor: [0, 0, 0, 0],
-            getLineColor: [255, 220, 50, 255],
+            getLineColor: d => [...channelColorRGB(d.ch), 255] as [number,number,number,number],
             getRadius: 900,
             radiusMinPixels: 5,
             radiusMaxPixels: 16,
@@ -285,6 +289,7 @@
             lineWidthMinPixels: 2,
             lineWidthMaxPixels: 4,
             pickable: false,
+            updateTriggers: { getLineColor: [comms] },
           }),
         ]
       })(),

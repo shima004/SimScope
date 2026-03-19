@@ -2,6 +2,7 @@
   import { agentReceivedComms, entities, selectedEntity, selectedId } from '$lib/stores/simulation'
   import { EntityURNLabel, FIERYNESS_LABEL, EntityURN, entityColor, isAgent } from '$lib/rcrs/urns'
   import type { BuildingEntity, RefugeEntity, HumanEntity, BlockadeEntity, FireBrigadeEntity, AreaEntity } from '$lib/rcrs/types'
+  import { channelColorCSS } from '$lib/rcrs/channelColors'
 
   function close() {
     selectedId.set(null)
@@ -169,11 +170,13 @@
 
       <!-- Received communications (file mode, agent only) -->
       {#if isAgent(e.urn) && $agentReceivedComms}
+        {@const sortedComms = [...$agentReceivedComms].sort((a, b) => a.channel - b.channel)}
         <div class="section-label">Communications ({$agentReceivedComms.length})</div>
         <div class="comm-list">
-          {#each $agentReceivedComms as msg}
+          {#each sortedComms as msg}
             {@const sender = $entities.get(msg.senderId)}
-            <div class="comm-entry">
+            {@const chColor = channelColorCSS(msg.channel)}
+            <div class="comm-entry" style="--ch-color:{chColor}">
               <div class="comm-header">
                 <span class="comm-type">{EntityURNLabel[sender?.urn ?? 0] ?? 'Unknown'}</span>
                 <button class="comm-id" onclick={() => selectedId.set(msg.senderId)}>
@@ -315,8 +318,9 @@
   }
 
   .comm-entry {
-    background: rgba(255, 220, 50, 0.06);
-    border: 1px solid rgba(255, 220, 50, 0.15);
+    --ch-color: #60c8ff;
+    background: color-mix(in srgb, var(--ch-color) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ch-color) 30%, transparent);
     border-radius: 4px;
     padding: 5px 7px;
     display: flex;
@@ -332,7 +336,7 @@
 
   .comm-type {
     font-size: 10px;
-    color: #ffc840;
+    color: var(--ch-color);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -353,7 +357,7 @@
 
   .comm-ch {
     font-size: 10px;
-    color: #507080;
+    color: color-mix(in srgb, var(--ch-color) 60%, #507080);
     flex-shrink: 0;
   }
 
