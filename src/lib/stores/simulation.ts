@@ -177,7 +177,7 @@ perceptionViewMode.subscribe(enabled => {
 
 /**
  * 選択エージェントの累積知覚から「エージェントが認識している世界」を再構築する。
- * - 道路・建物: 実際の変化 (火災等) を背景として適用し、知覚データで上書き
+ * - 道路・建物: baseEntities をベースに知覚データのみで上書き（実世界 timeline は反映しない）
  * - エージェント・瓦礫: 一度でも知覚したものだけ表示（最終知覚時の状態で固定）
  */
 export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
@@ -186,21 +186,7 @@ export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
     Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }]),
   );
 
-  // 2. エリア・建物の実際の変化を適用（火災・崩壊などの環境変化）
-  for (let s = 1; s <= targetStep; s++) {
-    const changes = timeline.get(s);
-    if (!changes) continue;
-    const areaOnly: ChangeSetProto = {
-      changes: changes.changes.filter(c => {
-        const e = snapshot.get(c.entityID);
-        return e && !isAgent(e.urn) && e.urn !== EntityURN.BLOCKADE;
-      }),
-      deletes: [],
-    };
-    if (areaOnly.changes.length > 0) applyChanges(snapshot, areaOnly);
-  }
-
-  // 3. 知覚データを累積適用し、知覚済みエンティティ ID を収集
+  // 2. 知覚データを累積適用し、知覚済みエンティティ ID を収集
   const seenIds = new Set<number>();
   for (let s = 1; s <= targetStep; s++) {
     const percMap = perceptionChangesTimeline.get(s);
@@ -211,7 +197,7 @@ export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
     applyChanges(snapshot, percChanges);
   }
 
-  // 4. 一度も知覚していないエージェント・瓦礫を除去
+  // 3. 一度も知覚していないエージェント・瓦礫を除去
   for (const [id, e] of snapshot) {
     if ((isAgent(e.urn) || e.urn === EntityURN.BLOCKADE) && !seenIds.has(id)) {
       snapshot.delete(id);
