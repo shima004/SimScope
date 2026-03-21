@@ -162,7 +162,19 @@ function updatePerceptionState(step: number, selId: number | null) {
 }
 
 // selectedId が変化したときも知覚データを更新
-selectedId.subscribe(selId => updatePerceptionState(get(currentStep), selId));
+selectedId.subscribe(selId => {
+  // ピン止めなし・Perception ON の状態でエージェント以外を選択したらモード解除
+  if (get(pinnedAgentId) === null && get(perceptionViewMode)) {
+    const e = selId !== null ? get(entities).get(selId) : null;
+    if (!e || !isAgent(e.urn)) {
+      perceptionViewMode.set(false);
+      agentVisibleIds.set(null);
+      agentReceivedComms.set(null);
+      return;
+    }
+  }
+  updatePerceptionState(get(currentStep), selId);
+});
 
 // perceptionViewMode が ON になったとき即時再構築
 perceptionViewMode.subscribe(enabled => {
