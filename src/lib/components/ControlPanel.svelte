@@ -227,7 +227,13 @@
 
   <!-- Live step counter (WS mode) -->
   {#if $mode === "ws" && $currentStep > 0}
-    <div class="live-step">Step {$currentStep}</div>
+    {@const wsMaxStep = $kernelConfig["kernel.timesteps"] ? Number($kernelConfig["kernel.timesteps"]) : null}
+    <section class="timeline">
+      <div class="timeline-header">
+        <span class="section-label">Step</span>
+        <span class="step-counter">{$currentStep}{wsMaxStep ? ` / ${wsMaxStep}` : ""}</span>
+      </div>
+    </section>
   {/if}
 
   <!-- Kernel config button (WS mode) -->
@@ -486,13 +492,6 @@
   }
   .btn.icon.play:hover {
     background: rgba(0, 180, 255, 0.25);
-  }
-
-  .live-step {
-    font-size: 11px;
-    color: #a8c8d8;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
   }
 
   .overlay-backdrop {
