@@ -2,7 +2,13 @@ import { LogProto as LogProtoCodec } from "$lib/proto/RCRSLogProto";
 import type { ChangeSetProto, EntityProto } from "$lib/proto/RCRSProto";
 import { applyChanges, decodeEntity } from "$lib/rcrs/decoder";
 import type { SimEntity } from "$lib/rcrs/types";
-import { CommandURN, ComponentCommandURN, ComponentControlMsgURN, EntityURN, isAgent } from "$lib/rcrs/urns";
+import {
+  CommandURN,
+  ComponentCommandURN,
+  ComponentControlMsgURN,
+  EntityURN,
+  isAgent,
+} from "$lib/rcrs/urns";
 import { extract7zAllFiles } from "$lib/sevenzip";
 import { derived, get, writable } from "svelte/store";
 
@@ -46,7 +52,10 @@ let perceptionTimeline: Map<number, Map<number, number[]>> = new Map();
  * Per-timestep perception entity changes — only populated in file mode.
  * Maps step → (agentId → ChangeSetProto of perceived entity states)
  */
-let perceptionChangesTimeline: Map<number, Map<number, ChangeSetProto>> = new Map();
+let perceptionChangesTimeline: Map<
+  number,
+  Map<number, ChangeSetProto>
+> = new Map();
 
 /**
  * Per-timestep communication data — only populated in file mode.
@@ -58,38 +67,43 @@ let commTimeline: Map<number, Map<number, CommMessage[]>> = new Map();
  * Per-timestep AK_SPEAK stats — only populated in file mode.
  * Maps step → (channel → { count, bytes })
  */
-let speakTimeline: Map<number, Map<number, { count: number; bytes: number }>> = new Map();
+let speakTimeline: Map<
+  number,
+  Map<number, { count: number; bytes: number }>
+> = new Map();
 
 export interface CommMessage {
   senderId: number;
-  channel:  number;
-  text:     string; // UTF-8 decoded rawData (不明なバイト列は hex 文字列)
+  channel: number;
+  text: string; // UTF-8 decoded rawData (不明なバイト列は hex 文字列)
 }
 
 export interface AgentAction {
-  urn:     number
-  target?: number   // AK_CLEAR: 対象ブロッケード entity ID
-  destX?:  number   // AK_CLEAR_AREA: 中心 X
-  destY?:  number   // AK_CLEAR_AREA: 中心 Y
+  urn: number;
+  target?: number; // AK_CLEAR: 対象ブロッケード entity ID
+  destX?: number; // AK_CLEAR_AREA: 中心 X
+  destY?: number; // AK_CLEAR_AREA: 中心 Y
 }
 
 export const entities = writable<Map<number, SimEntity>>(new Map());
 export const currentStep = writable(0);
 export const maxStep = writable(0);
-export const selectedId   = writable<number | null>(null)
-export const kernelConfig = writable<Record<string, string>>({})
+export const selectedId = writable<number | null>(null);
+export const kernelConfig = writable<Record<string, string>>({});
 /** マップを指定座標にズームさせるトリガー。セット後 SimMap が null にリセット */
-export const focusPoint = writable<{ x: number; y: number } | null>(null)
+export const focusPoint = writable<{ x: number; y: number } | null>(null);
 /** 選択中エージェントへの追従モード */
-export const followMode = writable(false)
+export const followMode = writable(false);
 /** agentId → AgentAction (current timestep only) */
-export const agentActions = writable<Map<number, AgentAction>>(new Map())
+export const agentActions = writable<Map<number, AgentAction>>(new Map());
 /** channel → { count, bytes } AK_SPEAK stats (current timestep only) */
-export const currentSpeakStats = writable<Map<number, { count: number; bytes: number }>>(new Map())
+export const currentSpeakStats = writable<
+  Map<number, { count: number; bytes: number }>
+>(new Map());
 /** 通信可視化で非表示にするチャンネル番号のセット */
-export const hiddenChannels = writable<Set<number>>(new Set())
+export const hiddenChannels = writable<Set<number>>(new Set());
 /** 初期ステップの瓦礫 repairCost 合計（除去率計算用） */
-export const initialBlockadeCost = writable(0)
+export const initialBlockadeCost = writable(0);
 
 export const selectedEntity = derived(
   [entities, selectedId],
@@ -106,7 +120,6 @@ export const pinnedEntity = derived(
   ([$entities, $pinnedAgentId]) =>
     $pinnedAgentId !== null ? ($entities.get($pinnedAgentId) ?? null) : null,
 );
-
 
 /**
  * 選択中エージェントが現在ステップで知覚したエンティティIDのセット。
@@ -147,7 +160,7 @@ export const inspectedEntity = derived(
 );
 
 // ピン止め変化時: ON → selectedId をピン固定、OFF → inspectedId をクリア
-pinnedAgentId.subscribe(id => {
+pinnedAgentId.subscribe((id) => {
   if (id !== null) selectedId.set(id);
   else inspectedId.set(null);
 });
@@ -159,10 +172,12 @@ function updatePerceptionState(step: number, selId: number | null) {
     return;
   }
 
-  const ids = perceptionTimeline.get(step)?.get(selId);
+  // 実世界 step T = コマンド実行後 → PERCEPTION は step T+1 に対応
+  const percStep = step + 1;
+  const ids = perceptionTimeline.get(percStep)?.get(selId);
   agentVisibleIds.set(ids ? new Set(ids) : null);
 
-  const comms = commTimeline.get(step)?.get(selId) ?? null;
+  const comms = commTimeline.get(percStep)?.get(selId) ?? null;
   agentReceivedComms.set(comms?.length ? comms : null);
 
   // データの有無に関わらず再構築（early return すると古い状態が残る）
@@ -170,7 +185,7 @@ function updatePerceptionState(step: number, selId: number | null) {
 }
 
 // selectedId が変化したときも知覚データを更新
-selectedId.subscribe(selId => {
+selectedId.subscribe((selId) => {
   // ピン止めなし・Perception ON の状態でエージェント以外を選択したらモード解除
   if (get(pinnedAgentId) === null && get(perceptionViewMode)) {
     const e = selId !== null ? get(entities).get(selId) : null;
@@ -185,7 +200,7 @@ selectedId.subscribe(selId => {
 });
 
 // perceptionViewMode が ON になったとき即時再構築
-perceptionViewMode.subscribe(enabled => {
+perceptionViewMode.subscribe((enabled) => {
   const selId = get(selectedId);
   if (enabled && selId !== null) rebuildPerceivedWorld(get(currentStep), selId);
   else if (!enabled) perceivedEntities.set(new Map());
@@ -202,9 +217,9 @@ export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
     Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }]),
   );
 
-  // 2. 知覚データを累積適用し、知覚済みエンティティ ID を収集
+  // 2. 知覚データを累積適用（step T+1 の PERCEPTION = step T の実世界に対応）
   const seenIds = new Set<number>();
-  for (let s = 1; s <= targetStep; s++) {
+  for (let s = 1; s <= targetStep + 1; s++) {
     const percMap = perceptionChangesTimeline.get(s);
     if (!percMap) continue;
     const percChanges = percMap.get(agentId);
@@ -217,7 +232,10 @@ export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
   // （知覚データが一件もない場合は除去しない＝初期世界をそのまま表示）
   if (seenIds.size > 0) {
     for (const [id, e] of snapshot) {
-      if ((isAgent(e.urn) || e.urn === EntityURN.BLOCKADE) && !seenIds.has(id)) {
+      if (
+        (isAgent(e.urn) || e.urn === EntityURN.BLOCKADE) &&
+        !seenIds.has(id)
+      ) {
         snapshot.delete(id);
       }
     }
@@ -263,7 +281,8 @@ export function connectWS(url: string) {
           if (msg.time === 1) {
             let totalCost = 0;
             for (const e of next.values()) {
-              if ('repairCost' in e) totalCost += (e as { repairCost: number }).repairCost;
+              if ("repairCost" in e)
+                totalCost += (e as { repairCost: number }).repairCost;
             }
             initialBlockadeCost.set(totalCost);
           }
@@ -272,11 +291,17 @@ export function connectWS(url: string) {
         currentStep.set(msg.time);
         if (Array.isArray(msg.commands)) {
           const actions = new Map<number, AgentAction>();
-          for (const c of msg.commands as { agentId: number; urn: number; target?: number; destX?: number; destY?: number }[]) {
+          for (const c of msg.commands as {
+            agentId: number;
+            urn: number;
+            target?: number;
+            destX?: number;
+            destY?: number;
+          }[]) {
             const action: AgentAction = { urn: c.urn };
             if (c.target !== undefined) action.target = c.target;
-            if (c.destX  !== undefined) action.destX  = c.destX;
-            if (c.destY  !== undefined) action.destY  = c.destY;
+            if (c.destX !== undefined) action.destX = c.destX;
+            if (c.destY !== undefined) action.destY = c.destY;
             actions.set(c.agentId, action);
           }
           agentActions.set(actions);
@@ -311,7 +336,7 @@ export function disconnectWS() {
 
 // ── File loading ──────────────────────────────────────────────────────────────
 
-async function loadRaw(raw: ArrayBuffer, filename = 'archive.7z') {
+async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   const files = await extract7zAllFiles(raw, filename);
 
   // INITIAL_CONDITIONS may be at top level or inside a subdirectory (e.g. rescue.log/)
@@ -351,11 +376,11 @@ async function loadRaw(raw: ArrayBuffer, filename = 'archive.7z') {
   // N/PERCEPTION/agentId 形式のファイルをすべてパース
   // パスは "rescue.log/1/PERCEPTION/123" または "1/PERCEPTION/123" 両方に対応
   for (const k of files.keys()) {
-    if (!k.includes('/PERCEPTION/')) continue;
-    const parts = k.split('/');
-    const percIdx = parts.indexOf('PERCEPTION');
+    if (!k.includes("/PERCEPTION/")) continue;
+    const parts = k.split("/");
+    const percIdx = parts.indexOf("PERCEPTION");
     if (percIdx < 1) continue;
-    const step    = parseInt(parts[percIdx - 1], 10);
+    const step = parseInt(parts[percIdx - 1], 10);
     const agentId = parseInt(parts[percIdx + 1], 10);
     if (isNaN(step) || isNaN(agentId)) continue;
     handleLogFrame(LogProtoCodec.decode(files.get(k)!));
@@ -363,13 +388,14 @@ async function loadRaw(raw: ArrayBuffer, filename = 'archive.7z') {
 
   // ステップ1のスナップショットから瓦礫の初期 repairCost 合計を計算
   const step1 = new Map<number, SimEntity>(
-    Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }])
+    Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }]),
   );
   const step1changes = timeline.get(1);
   if (step1changes) applyChanges(step1, step1changes);
   let totalCost = 0;
   for (const e of step1.values()) {
-    if ('repairCost' in e) totalCost += (e as { repairCost: number }).repairCost;
+    if ("repairCost" in e)
+      totalCost += (e as { repairCost: number }).repairCost;
   }
   initialBlockadeCost.set(totalCost);
 
@@ -392,24 +418,29 @@ export async function loadFile(file: File) {
   }
 }
 
-export async function loadUrl(url: string): Promise<'ok' | 'not_found' | 'error'> {
+export async function loadUrl(
+  url: string,
+): Promise<"ok" | "not_found" | "error"> {
   loading.set(true);
   errorMsg.set(null);
   mode.set("file");
   reset();
   try {
-    const head = await fetch(url, { method: 'HEAD' });
-    if (head.status === 404) { mode.set("idle"); return 'not_found'; }
+    const head = await fetch(url, { method: "HEAD" });
+    if (head.status === 404) {
+      mode.set("idle");
+      return "not_found";
+    }
     if (!head.ok) throw new Error(`HTTP ${head.status}`);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const filename = url.split('/').pop()?.split('?')[0] ?? 'archive.7z';
+    const filename = url.split("/").pop()?.split("?")[0] ?? "archive.7z";
     await loadRaw(await res.arrayBuffer(), filename);
-    return 'ok';
+    return "ok";
   } catch (e) {
     errorMsg.set(`Failed to load URL: ${e}`);
     mode.set("idle");
-    return 'error';
+    return "error";
   } finally {
     loading.set(false);
   }
@@ -419,8 +450,7 @@ export async function loadUrl(url: string): Promise<'ok' | 'not_found' | 'error'
 
 export function seekToStep(step: number) {
   if (get(mode) !== "file") return;
-  // 実世界は step-1 までの変化を適用（PERCEPTION のタイミングと一致させるため）
-  rebuildState(Math.max(0, step - 1));
+  rebuildState(step);
   currentStep.set(step);
   currentSpeakStats.set(speakTimeline.get(step) ?? new Map());
   updatePerceptionState(step, get(selectedId));
@@ -444,12 +474,12 @@ function rebuildState(targetStep: number) {
 
 function handleLogFrame(frame: LogProtoMsg) {
   if (frame.config) {
-    const data = frame.config.config?.data ?? {}
-    kernelConfig.set(data)
+    const data = frame.config.config?.data ?? {};
+    kernelConfig.set(data);
     // 全チャンネルをデフォルトで非表示に初期化
-    const allCh = new Set<number>()
-    for (let i = 0; data[`comms.channels.${i}.type`]; i++) allCh.add(i)
-    if (allCh.size > 0) hiddenChannels.set(allCh)
+    const allCh = new Set<number>();
+    for (let i = 0; data[`comms.channels.${i}.type`]; i++) allCh.add(i);
+    if (allCh.size > 0) hiddenChannels.set(allCh);
   }
 
   if (frame.initialCondition) {
@@ -470,48 +500,60 @@ function handleLogFrame(frame: LogProtoMsg) {
       if (agentId === undefined) continue;
       const action: AgentAction = { urn: cmd.urn };
       const target = cmd.components[ComponentCommandURN.Target]?.entityID;
-      const destX  = cmd.components[ComponentCommandURN.DestinationX]?.intValue;
-      const destY  = cmd.components[ComponentCommandURN.DestinationY]?.intValue;
+      const destX = cmd.components[ComponentCommandURN.DestinationX]?.intValue;
+      const destY = cmd.components[ComponentCommandURN.DestinationY]?.intValue;
       if (target !== undefined) action.target = target;
-      if (destX  !== undefined) action.destX  = destX;
-      if (destY  !== undefined) action.destY  = destY;
+      if (destX !== undefined) action.destX = destX;
+      if (destY !== undefined) action.destY = destY;
       actionMap.set(agentId, action);
     }
     commandTimeline.set(time, actionMap);
 
     // AK_SPEAK の送信メッセージ数・バイト数をチャンネル別に集計
-    const speakMap = new Map<number, { count: number; bytes: number }>()
+    const speakMap = new Map<number, { count: number; bytes: number }>();
     for (const cmd of cmds) {
-      if (cmd.urn !== CommandURN.AK_SPEAK) continue
-      const channel = cmd.components[ComponentCommandURN.Channel]?.intValue
-      const raw     = cmd.components[ComponentCommandURN.Message]?.rawData
-      if (channel === undefined || !raw) continue
-      const cur = speakMap.get(channel) ?? { count: 0, bytes: 0 }
-      speakMap.set(channel, { count: cur.count + 1, bytes: cur.bytes + raw.length })
+      if (cmd.urn !== CommandURN.AK_SPEAK) continue;
+      const channel = cmd.components[ComponentCommandURN.Channel]?.intValue;
+      const raw = cmd.components[ComponentCommandURN.Message]?.rawData;
+      if (channel === undefined || !raw) continue;
+      const cur = speakMap.get(channel) ?? { count: 0, bytes: 0 };
+      speakMap.set(channel, { count: cur.count + 1, bytes: cur.bytes + raw.length });
     }
-    if (speakMap.size > 0) speakTimeline.set(time, speakMap)
+    if (speakMap.size > 0) speakTimeline.set(time, speakMap);
   }
 
   if (frame.perception) {
     const { time, entityID, visible, communications } = frame.perception;
     if (visible && visible.changes.length > 0) {
-      if (!perceptionTimeline.has(time)) perceptionTimeline.set(time, new Map());
-      perceptionTimeline.get(time)!.set(entityID, visible.changes.map(c => c.entityID));
+      if (!perceptionTimeline.has(time))
+        perceptionTimeline.set(time, new Map());
+      perceptionTimeline.get(time)!.set(
+        entityID,
+        visible.changes.map((c) => c.entityID),
+      );
 
-      if (!perceptionChangesTimeline.has(time)) perceptionChangesTimeline.set(time, new Map());
+      if (!perceptionChangesTimeline.has(time))
+        perceptionChangesTimeline.set(time, new Map());
       perceptionChangesTimeline.get(time)!.set(entityID, visible);
     }
     if (communications.length > 0) {
       const msgs: CommMessage[] = [];
       for (const msg of communications) {
-        const senderId = msg.components[ComponentControlMsgURN.AgentID]?.entityID;
+        const senderId =
+          msg.components[ComponentControlMsgURN.AgentID]?.entityID;
         if (senderId === undefined) continue;
-        const channel = msg.components[ComponentCommandURN.Channel]?.intValue ?? 0;
+        const channel =
+          msg.components[ComponentCommandURN.Channel]?.intValue ?? 0;
         const rawData = msg.components[ComponentCommandURN.Message]?.rawData;
-        let text = '';
+        let text = "";
         if (rawData?.length) {
-          try { text = new TextDecoder().decode(rawData); }
-          catch { text = Array.from(rawData).map(b => b.toString(16).padStart(2, '0')).join(''); }
+          try {
+            text = new TextDecoder().decode(rawData);
+          } catch {
+            text = Array.from(rawData)
+              .map((b) => b.toString(16).padStart(2, "0"))
+              .join("");
+          }
         }
         msgs.push({ senderId, channel, text });
       }
