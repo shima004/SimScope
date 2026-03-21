@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { kernelConfig, hiddenChannels } from '$lib/stores/simulation'
+  import { kernelConfig, hiddenChannels, currentSpeakStats } from '$lib/stores/simulation'
   import { channelColorCSS } from '$lib/rcrs/channelColors'
 
   interface ChannelInfo {
@@ -37,21 +37,27 @@
 {#if channels.length > 0}
   <div class="panel">
     <div class="title">Channels</div>
-    <div class="ch-row">
+    <div class="ch-list">
       {#each channels as ch}
-        {@const hidden = $hiddenChannels.has(ch.index)}
-        {@const color  = channelColorCSS(ch.index)}
-        <button
-          class="ch-btn"
-          class:hidden
-          style="--c:{color}"
-          onclick={() => toggle(ch.index)}
-          title="{ch.type}{ch.bandwidth ? ' · ' + (ch.bandwidth / 1000).toFixed(0) + ' kbps' : ''}{ch.range ? ' · ' + (ch.range / 1000).toFixed(0) + ' km' : ''}"
-        >
-          <span class="ch-dot"></span>
-          <span class="ch-label">ch.{ch.index}</span>
-          <span class="ch-type">{ch.type}</span>
-        </button>
+        {@const hidden   = $hiddenChannels.has(ch.index)}
+        {@const color    = channelColorCSS(ch.index)}
+        {@const stats = $currentSpeakStats.get(ch.index)}
+        {@const sizeLabel = ch.bandwidth ? (ch.bandwidth / 1000).toFixed(0) + ' kbps' : '—'}
+        <div class="ch-row">
+          <button
+            class="ch-btn"
+            class:hidden
+            style="--c:{color}"
+            onclick={() => toggle(ch.index)}
+          >
+            <span class="ch-icon">{ch.type === 'voice' ? '🔊' : ch.type === 'radio' ? '📡' : '●'}</span>
+            <span class="ch-label">ch.{ch.index}</span>
+          </button>
+          <span class="ch-meta" style="color:color-mix(in srgb, {color} 55%, #607080)">{sizeLabel}</span>
+          <span class="ch-count" class:zero={!stats} style="color:{color}">
+            {stats ? `${stats.count} msg · ${stats.bytes} B` : '—'}
+          </span>
+        </div>
       {/each}
     </div>
   </div>
@@ -76,10 +82,16 @@
     margin-bottom: 6px;
   }
 
+  .ch-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   .ch-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    align-items: center;
+    gap: 8px;
   }
 
   .ch-btn {
@@ -102,13 +114,24 @@
     background: transparent;
   }
 
-  .ch-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--c);
+  .ch-icon {
+    font-size: 11px;
+    line-height: 1;
     flex-shrink: 0;
   }
+
+  .ch-meta {
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+
+  .ch-count {
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .ch-count.zero { opacity: 0.3; }
 
   .ch-label {
     font-size: 11px;

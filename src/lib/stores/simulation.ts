@@ -2,7 +2,7 @@ import { LogProto as LogProtoCodec } from "$lib/proto/RCRSLogProto";
 import type { ChangeSetProto, EntityProto } from "$lib/proto/RCRSProto";
 import { applyChanges, decodeEntity } from "$lib/rcrs/decoder";
 import type { SimEntity } from "$lib/rcrs/types";
-import { ComponentCommandURN, ComponentControlMsgURN, EntityURN, isAgent } from "$lib/rcrs/urns";
+import { CommandURN, ComponentCommandURN, ComponentControlMsgURN, EntityURN, isAgent } from "$lib/rcrs/urns";
 import { extract7zAllFiles } from "$lib/sevenzip";
 import { derived, get, writable } from "svelte/store";
 
@@ -54,6 +54,12 @@ let perceptionChangesTimeline: Map<number, Map<number, ChangeSetProto>> = new Ma
  */
 let commTimeline: Map<number, Map<number, CommMessage[]>> = new Map();
 
+/**
+ * Per-timestep AK_SPEAK stats — only populated in file mode.
+ * Maps step → (channel → { count, bytes })
+ */
+let speakTimeline: Map<number, Map<number, { count: number; bytes: number }>> = new Map();
+
 export interface CommMessage {
   senderId: number;
   channel:  number;
@@ -78,6 +84,8 @@ export const focusPoint = writable<{ x: number; y: number } | null>(null)
 export const followMode = writable(false)
 /** agentId → AgentAction (current timestep only) */
 export const agentActions = writable<Map<number, AgentAction>>(new Map())
+/** channel → { count, bytes } AK_SPEAK stats (current timestep only) */
+export const currentSpeakStats = writable<Map<number, { count: number; bytes: number }>>(new Map())
 /** 通信可視化で非表示にするチャンネル番号のセット */
 export const hiddenChannels = writable<Set<number>>(new Set())
 /** 初期ステップの瓦礫 repairCost 合計（除去率計算用） */
@@ -414,6 +422,7 @@ export function seekToStep(step: number) {
   // 実世界は step-1 までの変化を適用（PERCEPTION のタイミングと一致させるため）
   rebuildState(Math.max(0, step - 1));
   currentStep.set(step);
+  currentSpeakStats.set(speakTimeline.get(step) ?? new Map());
   updatePerceptionState(step, get(selectedId));
 }
 
@@ -435,7 +444,12 @@ function rebuildState(targetStep: number) {
 
 function handleLogFrame(frame: LogProtoMsg) {
   if (frame.config) {
-    kernelConfig.set(frame.config.config?.data ?? {})
+    const data = frame.config.config?.data ?? {}
+    kernelConfig.set(data)
+    // 全チャンネルをデフォルトで非表示に初期化
+    const allCh = new Set<number>()
+    for (let i = 0; data[`comms.channels.${i}.type`]; i++) allCh.add(i)
+    if (allCh.size > 0) hiddenChannels.set(allCh)
   }
 
   if (frame.initialCondition) {
@@ -464,6 +478,18 @@ function handleLogFrame(frame: LogProtoMsg) {
       actionMap.set(agentId, action);
     }
     commandTimeline.set(time, actionMap);
+
+    // AK_SPEAK の送信メッセージ数・バイト数をチャンネル別に集計
+    const speakMap = new Map<number, { count: number; bytes: number }>()
+    for (const cmd of cmds) {
+      if (cmd.urn !== CommandURN.AK_SPEAK) continue
+      const channel = cmd.components[ComponentCommandURN.Channel]?.intValue
+      const raw     = cmd.components[ComponentCommandURN.Message]?.rawData
+      if (channel === undefined || !raw) continue
+      const cur = speakMap.get(channel) ?? { count: 0, bytes: 0 }
+      speakMap.set(channel, { count: cur.count + 1, bytes: cur.bytes + raw.length })
+    }
+    if (speakMap.size > 0) speakTimeline.set(time, speakMap)
   }
 
   if (frame.perception) {
@@ -523,6 +549,7 @@ function reset() {
   perceptionTimeline = new Map();
   perceptionChangesTimeline = new Map();
   commTimeline = new Map();
+  speakTimeline = new Map();
   entities.set(new Map());
   currentStep.set(0);
   maxStep.set(0);
