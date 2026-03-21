@@ -153,6 +153,8 @@
     const clearAreaPolygons: [number, number][][] = [];
 
     for (const [agentId, action] of actions) {
+      // Perception ON 時は現ステップの知覚 ID のみ、それ以外は emap に存在するもののみ
+      if (perceivedIds ? !perceivedIds.has(agentId) : !emap.has(agentId)) continue;
       if (action.urn === CommandURN.AK_CLEAR && action.target !== undefined) {
         clearingTargets.add(action.target);
       } else if (
