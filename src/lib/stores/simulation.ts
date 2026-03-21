@@ -400,7 +400,8 @@ export async function loadUrl(url: string): Promise<'ok' | 'not_found' | 'error'
 
 export function seekToStep(step: number) {
   if (get(mode) !== "file") return;
-  rebuildState(step);
+  // 実世界は step-1 までの変化を適用（PERCEPTION のタイミングと一致させるため）
+  rebuildState(Math.max(0, step - 1));
   currentStep.set(step);
   updatePerceptionState(step, get(selectedId));
 }
