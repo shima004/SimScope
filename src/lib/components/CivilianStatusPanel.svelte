@@ -390,9 +390,6 @@
     margin-bottom: 2px;
   }
 
-  .ch-id {
-  }
-
   .ch-col {
     font-size: 9px;
     font-weight: 600;

@@ -164,9 +164,4 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .ch-type {
-    font-size: 10px;
-    color: color-mix(in srgb, var(--c) 60%, #607080);
-    text-transform: capitalize;
-  }
 </style>
