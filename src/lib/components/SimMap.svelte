@@ -22,7 +22,7 @@
 
   // Base color per facility type (used when not on fire)
   const FACILITY_COLOR: Partial<Record<number, [number, number, number]>> = {
-    [EntityURN.REFUGE]:           [40,  200, 100],  // 避難所: 緑
+    [EntityURN.REFUGE]:           [20,  140, 60 ],  // 避難所: 濃い緑
     [EntityURN.FIRE_STATION]:     [220, 60,  60 ],  // 消防署: 赤
     [EntityURN.AMBULANCE_CENTRE]: [60,  160, 220],  // 救急センター: 水色
     [EntityURN.POLICE_OFFICE]:    [80,  80,  220],  // 警察署: 青
