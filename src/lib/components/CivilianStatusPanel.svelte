@@ -1,111 +1,237 @@
 <script lang="ts">
   import type { HumanEntity } from '$lib/rcrs/types';
   import { CommandURN, EntityURN, entityColor, isAgent } from '$lib/rcrs/urns';
-  import { agentActions, entities, focusPoint, selectedId } from '$lib/stores/simulation';
+  import { agentActions, entities, focusPoint, perceivedEntities, perceptionViewMode, selectedId } from '$lib/stores/simulation';
 
-  // 救助中の市民: AK_RESCUE アクションのターゲット（重複排除）
-  const rescuedCivilians = $derived.by(() => {
+  type CarryPair = { civilian: HumanEntity; carrier: HumanEntity }
+  type MergedHuman = { id: number; p: HumanEntity | null; a: HumanEntity | null }
+  type MergedCarry  = { id: number; p: CarryPair  | null; a: CarryPair  | null }
+
+  function calcRescued(map: Map<number, import('$lib/rcrs/types').SimEntity>) {
     const seen = new Map<number, HumanEntity>()
     for (const action of $agentActions.values()) {
       if (action.urn === CommandURN.AK_RESCUE && action.target !== undefined) {
-        const e = $entities.get(action.target)
+        const e = map.get(action.target)
         if (e && !seen.has(e.id)) seen.set(e.id, e as HumanEntity)
       }
     }
     return [...seen.values()]
-  })
+  }
 
-  // 搬送中の市民: position が救急隊の ID になっている市民
-  const carriedCivilians = $derived.by(() => {
-    const result: { civilian: HumanEntity; carrier: HumanEntity }[] = []
-    for (const e of $entities.values()) {
+  function calcCarried(map: Map<number, import('$lib/rcrs/types').SimEntity>): CarryPair[] {
+    const result: CarryPair[] = []
+    for (const e of map.values()) {
       if (e.urn === EntityURN.CIVILIAN) {
         const h = e as HumanEntity
-        const carrier = $entities.get(h.position)
-        if (carrier?.urn === EntityURN.AMBULANCE_TEAM) {
+        const carrier = map.get(h.position)
+        if (carrier?.urn === EntityURN.AMBULANCE_TEAM)
           result.push({ civilian: h, carrier: carrier as HumanEntity })
-        }
       }
     }
     return result
-  })
+  }
 
-  // 埋まっているエージェント（救助中は除外）、buriedness 降順
-  const buriedCivilians = $derived.by(() => {
-    const rescuedIds = new Set(rescuedCivilians.map(c => c.id))
+  function calcBuried(map: Map<number, import('$lib/rcrs/types').SimEntity>, rescuedIds: Set<number>) {
     const result: HumanEntity[] = []
-    for (const e of $entities.values()) {
+    for (const e of map.values()) {
       if (!isAgent(e.urn)) continue
       const h = e as HumanEntity
-      if (h.buriedness === 0) continue
-      if (rescuedIds.has(h.id)) continue
+      if (h.buriedness === 0 || rescuedIds.has(h.id)) continue
       result.push(h)
     }
     const urnOrder: Record<number, number> = {
-      [EntityURN.FIRE_BRIGADE]: 0,
-      [EntityURN.AMBULANCE_TEAM]: 1,
-      [EntityURN.POLICE_FORCE]: 2,
-      [EntityURN.CIVILIAN]: 3,
+      [EntityURN.FIRE_BRIGADE]: 0, [EntityURN.AMBULANCE_TEAM]: 1,
+      [EntityURN.POLICE_FORCE]: 2, [EntityURN.CIVILIAN]: 3,
     }
     return result.sort((a, b) => {
       const ro = (urnOrder[a.urn] ?? 9) - (urnOrder[b.urn] ?? 9)
-      if (ro !== 0) return ro
-      return a.id - b.id
+      return ro !== 0 ? ro : a.id - b.id
     })
-  })
-
-  function focusOn(x: number, y: number, id: number) {
-    selectedId.set(id)
-    focusPoint.set({ x, y })
   }
 
-  const hasAny = $derived(buriedCivilians.length > 0 || rescuedCivilians.length > 0 || carriedCivilians.length > 0)
+  function mergeHumans(p: HumanEntity[], a: HumanEntity[]): MergedHuman[] {
+    const map = new Map<number, MergedHuman>()
+    for (const h of p) map.set(h.id, { id: h.id, p: h, a: null })
+    for (const h of a) {
+      const e = map.get(h.id)
+      if (e) e.a = h
+      else map.set(h.id, { id: h.id, p: null, a: h })
+    }
+    return [...map.values()].sort((x, y) => {
+      const pd = (x.p ? 0 : 1) - (y.p ? 0 : 1)
+      return pd !== 0 ? pd : x.id - y.id
+    })
+  }
+
+  function mergeCarried(p: CarryPair[], a: CarryPair[]): MergedCarry[] {
+    const map = new Map<number, MergedCarry>()
+    for (const pair of p) map.set(pair.civilian.id, { id: pair.civilian.id, p: pair, a: null })
+    for (const pair of a) {
+      const e = map.get(pair.civilian.id)
+      if (e) e.a = pair
+      else map.set(pair.civilian.id, { id: pair.civilian.id, p: null, a: pair })
+    }
+    return [...map.values()].sort((x, y) => {
+      const pd = (x.p ? 0 : 1) - (y.p ? 0 : 1)
+      return pd !== 0 ? pd : x.id - y.id
+    })
+  }
+
+  const rescuedActual = $derived(calcRescued($entities))
+  const carriedActual = $derived(calcCarried($entities))
+  const buriedActual  = $derived(calcBuried($entities, new Set(rescuedActual.map(c => c.id))))
+
+  const rescuedPerceived = $derived($perceptionViewMode ? calcRescued($perceivedEntities) : [])
+  const carriedPerceived = $derived($perceptionViewMode ? calcCarried($perceivedEntities) : [])
+  const buriedPerceived  = $derived($perceptionViewMode
+    ? calcBuried($perceivedEntities, new Set(rescuedPerceived.map(c => c.id))) : [])
+
+  const mergedCarried  = $derived($perceptionViewMode ? mergeCarried(carriedPerceived, carriedActual) : null)
+  const mergedRescued  = $derived($perceptionViewMode ? mergeHumans(rescuedPerceived, rescuedActual) : null)
+  const mergedBuried   = $derived($perceptionViewMode ? mergeHumans(buriedPerceived,  buriedActual)  : null)
+
+  const hasAny = $derived(
+    buriedActual.length > 0 || rescuedActual.length > 0 || carriedActual.length > 0 ||
+    buriedPerceived.length > 0 || rescuedPerceived.length > 0 || carriedPerceived.length > 0
+  )
+
+  function focusOn(h: HumanEntity) {
+    selectedId.set(h.id)
+    focusPoint.set({ x: h.x, y: h.y })
+  }
 </script>
 
 {#if hasAny}
-  <div class="panel">
-    {#if carriedCivilians.length > 0}
-      <div class="section-label">Carrying ({carriedCivilians.length})</div>
-      {#each carriedCivilians as { civilian: c, carrier } (c.id)}
-        <button class="row" onclick={() => focusOn(carrier.x, carrier.y, c.id)} class:selected={$selectedId === c.id}>
-          <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
-          <span class="stat">
-            <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"></span></span>
-            <span class="num">{c.hp.toLocaleString()}</span>
-          </span>
-          <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ''}</span>
-        </button>
-      {/each}
-    {/if}
+  <div class="panel" class:dual={!!mergedCarried}>
 
-    {#if rescuedCivilians.length > 0}
-      <div class="section-label">Rescuing ({rescuedCivilians.length})</div>
-      {#each rescuedCivilians as c (c.id)}
-        <button class="row" onclick={() => focusOn(c.x, c.y, c.id)} class:selected={$selectedId === c.id}>
-          <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
-          <span class="stat">
-            <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"></span></span>
-            <span class="num">{c.hp.toLocaleString()}</span>
-          </span>
-          <span class="badge bury">{c.buriedness > 0 ? `B:${c.buriedness}` : ''}</span>
-          <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ''}</span>
-        </button>
-      {/each}
-    {/if}
+    {#if mergedCarried}
+      <!-- ── dual column header ── -->
+      <div class="col-header">
+        <span class="ch-id"></span>
+        <span class="ch-col perceived">👁 Perceived</span>
+        <span class="ch-col actual">Actual</span>
+      </div>
 
-    {#if buriedCivilians.length > 0}
-      <div class="section-label">Buried ({buriedCivilians.length})</div>
-      {#each buriedCivilians as c (c.id)}
-        <button class="row" onclick={() => focusOn(c.x, c.y, c.id)} class:selected={$selectedId === c.id}>
-          <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
-          <span class="stat">
-            <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"></span></span>
-            <span class="num">{c.hp.toLocaleString()}</span>
-          </span>
-          <span class="badge bury">B:{c.buriedness}</span>
-          <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ''}</span>
-        </button>
-      {/each}
+      <!-- Carrying -->
+      {#if mergedCarried.length > 0}
+        <div class="section-label">Carrying ({mergedCarried.length})</div>
+        {#each mergedCarried as row (row.id)}
+          {@const rep = (row.p?.civilian ?? row.a!.civilian)}
+          <button class="dual-row" onclick={() => focusOn(row.p?.carrier ?? row.a!.carrier)} class:selected={$selectedId === row.id}>
+            <span class="cid" style="color:{entityColor(rep.urn)}">#{row.id}</span>
+            <span class="dual-cell">
+              {#if row.p}
+                <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, row.p.civilian.hp / 100)}%"></span></span>
+                <span class="num">{row.p.civilian.hp.toLocaleString()}</span>
+                {#if row.p.civilian.damage > 0}<span class="badge dmg">D:{row.p.civilian.damage}</span>{/if}
+              {/if}
+            </span>
+            <span class="dual-cell">
+              {#if row.a}
+                <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, row.a.civilian.hp / 100)}%"></span></span>
+                <span class="num">{row.a.civilian.hp.toLocaleString()}</span>
+                {#if row.a.civilian.damage > 0}<span class="badge dmg">D:{row.a.civilian.damage}</span>{/if}
+              {/if}
+            </span>
+          </button>
+        {/each}
+      {/if}
+
+      <!-- Rescuing -->
+      {#if mergedRescued && mergedRescued.length > 0}
+        <div class="section-label">Rescuing ({mergedRescued.length})</div>
+        {#each mergedRescued as row (row.id)}
+          {@const rep = row.p ?? row.a!}
+          <button class="dual-row" onclick={() => focusOn(rep)} class:selected={$selectedId === row.id}>
+            <span class="cid" style="color:{entityColor(rep.urn)}">#{row.id}</span>
+            <span class="dual-cell">
+              {#if row.p}
+                <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, row.p.hp / 100)}%"></span></span>
+                <span class="num">{row.p.hp.toLocaleString()}</span>
+                {#if row.p.buriedness > 0}<span class="badge bury">B:{row.p.buriedness}</span>{/if}
+              {/if}
+            </span>
+            <span class="dual-cell">
+              {#if row.a}
+                <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, row.a.hp / 100)}%"></span></span>
+                <span class="num">{row.a.hp.toLocaleString()}</span>
+                {#if row.a.buriedness > 0}<span class="badge bury">B:{row.a.buriedness}</span>{/if}
+              {/if}
+            </span>
+          </button>
+        {/each}
+      {/if}
+
+      <!-- Buried -->
+      {#if mergedBuried && mergedBuried.length > 0}
+        <div class="section-label">Buried ({mergedBuried.length})</div>
+        {#each mergedBuried as row (row.id)}
+          {@const rep = row.p ?? row.a!}
+          <button class="dual-row" onclick={() => focusOn(rep)} class:selected={$selectedId === row.id}>
+            <span class="cid" style="color:{entityColor(rep.urn)}">#{row.id}</span>
+            <span class="dual-cell">
+              {#if row.p}
+                <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, row.p.hp / 100)}%"></span></span>
+                <span class="num">{row.p.hp.toLocaleString()}</span>
+                <span class="badge bury">B:{row.p.buriedness}</span>
+              {/if}
+            </span>
+            <span class="dual-cell">
+              {#if row.a}
+                <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, row.a.hp / 100)}%"></span></span>
+                <span class="num">{row.a.hp.toLocaleString()}</span>
+                <span class="badge bury">B:{row.a.buriedness}</span>
+              {/if}
+            </span>
+          </button>
+        {/each}
+      {/if}
+
+    {:else}
+      <!-- ── single column (normal mode) ── -->
+      {#if carriedActual.length > 0}
+        <div class="section-label">Carrying ({carriedActual.length})</div>
+        {#each carriedActual as { civilian: c, carrier } (c.id)}
+          <button class="row" onclick={() => focusOn(carrier)} class:selected={$selectedId === c.id}>
+            <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
+            <span class="stat">
+              <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"></span></span>
+              <span class="num">{c.hp.toLocaleString()}</span>
+            </span>
+            <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ''}</span>
+          </button>
+        {/each}
+      {/if}
+
+      {#if rescuedActual.length > 0}
+        <div class="section-label">Rescuing ({rescuedActual.length})</div>
+        {#each rescuedActual as c (c.id)}
+          <button class="row" onclick={() => focusOn(c)} class:selected={$selectedId === c.id}>
+            <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
+            <span class="stat">
+              <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"></span></span>
+              <span class="num">{c.hp.toLocaleString()}</span>
+            </span>
+            <span class="badge bury">{c.buriedness > 0 ? `B:${c.buriedness}` : ''}</span>
+            <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ''}</span>
+          </button>
+        {/each}
+      {/if}
+
+      {#if buriedActual.length > 0}
+        <div class="section-label">Buried ({buriedActual.length})</div>
+        {#each buriedActual as c (c.id)}
+          <button class="row" onclick={() => focusOn(c)} class:selected={$selectedId === c.id}>
+            <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
+            <span class="stat">
+              <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"></span></span>
+              <span class="num">{c.hp.toLocaleString()}</span>
+            </span>
+            <span class="badge bury">B:{c.buriedness}</span>
+            <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ''}</span>
+          </button>
+        {/each}
+      {/if}
     {/if}
   </div>
 {/if}
@@ -132,6 +258,29 @@
     gap: 3px;
   }
 
+  .panel.dual { width: 380px; }
+
+  .col-header {
+    display: grid;
+    grid-template-columns: 72px 1fr 1fr;
+    gap: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(0, 200, 255, 0.1);
+    margin-bottom: 2px;
+  }
+
+  .ch-id { }
+
+  .ch-col {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+  .ch-col.perceived { color: #ffc840; }
+  .ch-col.actual    { color: #607080; }
+
   .section-label {
     font-size: 10px;
     font-weight: 600;
@@ -145,7 +294,7 @@
     border-top: 1px solid rgba(0, 200, 255, 0.1);
   }
 
-  .row {
+  .row, .dual-row {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -158,14 +307,30 @@
     width: 100%;
     text-align: left;
   }
-  .row:hover    { background: rgba(255,255,255,0.05); }
-  .row.selected { background: rgba(0, 200, 255, 0.1); }
+  .row:hover, .dual-row:hover    { background: rgba(255,255,255,0.05); }
+  .row.selected, .dual-row.selected { background: rgba(0, 200, 255, 0.1); }
+
+  .dual-row {
+    display: grid;
+    grid-template-columns: 72px 1fr 1fr;
+    gap: 4px;
+    align-items: center;
+  }
 
   .cid {
     color: #607080;
     font-size: 11px;
-    min-width: 68px;
     flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dual-cell {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
   }
 
   .stat {
@@ -177,35 +342,29 @@
 
   .bar-wrap {
     display: inline-block;
-    width: 44px;
+    width: 40px;
     height: 4px;
     background: rgba(255,255,255,0.1);
     border-radius: 2px;
     overflow: hidden;
     flex-shrink: 0;
   }
-  .bar {
-    display: block;
-    height: 100%;
-    border-radius: 2px;
-  }
+  .bar { display: block; height: 100%; border-radius: 2px; }
   .bar.hp { background: #40c870; }
 
   .num {
-    font-size: 11px;
+    font-size: 10px;
     color: #a8c8d8;
     font-variant-numeric: tabular-nums;
-    width: 28px;
     flex-shrink: 0;
-    text-align: right;
   }
 
   .badge {
     font-size: 10px;
-    padding: 1px 4px;
+    padding: 1px 3px;
     border-radius: 3px;
     flex-shrink: 0;
-    min-width: 28px;
+    min-width: 24px;
     text-align: center;
   }
   .badge:empty { display: none; }

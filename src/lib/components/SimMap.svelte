@@ -2,12 +2,18 @@
   import type { BlockadeEntity, BuildingEntity, HumanEntity, RoadEntity, SimEntity } from '$lib/rcrs/types';
   import { CommandURN, EntityURN, isAgent, isBuilding } from '$lib/rcrs/urns';
   import type { AgentAction, CommMessage } from '$lib/stores/simulation';
-  import { agentActions, agentReceivedComms, agentVisibleIds, entities, focusPoint, followMode, hiddenChannels, kernelConfig, selectedId } from '$lib/stores/simulation';
+  import { agentActions, agentReceivedComms, agentVisibleIds, entities, focusPoint, followMode, hiddenChannels, inspectedId, kernelConfig, perceivedEntities, perceptionViewMode, pinnedAgentId, selectedId } from '$lib/stores/simulation'
+  import { get } from 'svelte/store'
   import { channelColorRGB } from '$lib/rcrs/channelColors';
   import type { OrthographicViewState, PickingInfo } from '@deck.gl/core';
   import { Deck, OrthographicView } from '@deck.gl/core';
   import { LineLayer, PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
   import { onDestroy, onMount } from 'svelte';
+
+  function selectEntity(id: number | null) {
+    if (get(pinnedAgentId) !== null) inspectedId.set(id)
+    else selectedId.set(id)
+  }
 
   let canvas: HTMLCanvasElement
   let deck: Deck<OrthographicView> | null = null
@@ -142,7 +148,7 @@
         getLineColor: [70, 85, 105, 255],
         lineWidthMinPixels: 0.5,
         pickable: true,
-        onClick: (info: PickingInfo) => selectedId.set((info.object as RoadEntity)?.id ?? null),
+        onClick: (info: PickingInfo) => selectEntity((info.object as RoadEntity)?.id ?? null),
       }),
 
       new PolygonLayer({
@@ -161,7 +167,7 @@
                                         [100, 120, 160, 180],
         lineWidthMinPixels: 1.5,
         pickable: true,
-        onClick: (info: PickingInfo) => selectedId.set((info.object as BuildingEntity)?.id ?? null),
+        onClick: (info: PickingInfo) => selectEntity((info.object as BuildingEntity)?.id ?? null),
         updateTriggers: {
           getFillColor: [buildings.map(b => b.fieryness * 100 + b.brokenness), perceivedIds],
           getLineColor: [selId, perceivedIds],
@@ -183,7 +189,7 @@
         lineWidthMinPixels: 1,
         lineWidthMaxPixels: 4,
         pickable: true,
-        onClick: (info: PickingInfo) => selectedId.set((info.object as BlockadeEntity)?.id ?? null),
+        onClick: (info: PickingInfo) => selectEntity((info.object as BlockadeEntity)?.id ?? null),
         updateTriggers: { getFillColor: [perceivedIds], getLineColor: [selId, clearingTargets, perceivedIds] },
       }),
 
@@ -200,7 +206,7 @@
         radiusMinPixels: 3,
         radiusMaxPixels: 12,
         pickable: true,
-        onClick: (info: PickingInfo) => selectedId.set((info.object as HumanEntity)?.id ?? null),
+        onClick: (info: PickingInfo) => selectEntity((info.object as HumanEntity)?.id ?? null),
         updateTriggers: { getRadius: [selId], getFillColor: [actions, perceivedIds] },
       }),
 
@@ -366,8 +372,16 @@
 
   let prevSize = 0
 
+  function activeMap() { return $perceptionViewMode ? $perceivedEntities : $entities }
+  function rebuild() {
+    if (!deck) return
+    const emap = activeMap()
+    deck.setProps({ layers: buildLayers(emap, $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
+  }
+
   const unsubEntities = entities.subscribe((emap) => {
     if (!deck) return
+    if ($perceptionViewMode) return   // perceivedEntities が主役
     const selId = $selectedId
     deck.setProps({ layers: buildLayers(emap, selId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
     if (prevSize === 0 && emap.size > 0) fitViewport(emap)
@@ -375,30 +389,41 @@
     followAgent(emap, selId)
   })
 
+  const unsubPerceivedEntities = perceivedEntities.subscribe((emap) => {
+    if (!deck || !$perceptionViewMode) return
+    deck.setProps({ layers: buildLayers(emap, $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
+  })
+
+  const unsubPerceptionViewMode = perceptionViewMode.subscribe((enabled) => {
+    if (!deck) return
+    const emap = enabled ? $perceivedEntities : $entities
+    deck.setProps({ layers: buildLayers(emap, $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
+  })
+
   const unsubSel = selectedId.subscribe((selId) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, selId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
-    followAgent($entities, selId)
+    deck.setProps({ layers: buildLayers(activeMap(), selId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
+    followAgent(activeMap(), selId)
   })
 
   const unsubActions = agentActions.subscribe((actions) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, $selectedId, actions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
+    deck.setProps({ layers: buildLayers(activeMap(), $selectedId, actions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, $hiddenChannels) })
   })
 
   const unsubPerception = agentVisibleIds.subscribe((perceivedIds) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, $selectedId, $agentActions, $kernelConfig, perceivedIds, $agentReceivedComms, $hiddenChannels) })
+    deck.setProps({ layers: buildLayers(activeMap(), $selectedId, $agentActions, $kernelConfig, perceivedIds, $agentReceivedComms, $hiddenChannels) })
   })
 
   const unsubComms = agentReceivedComms.subscribe((comms) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, comms, $hiddenChannels) })
+    deck.setProps({ layers: buildLayers(activeMap(), $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, comms, $hiddenChannels) })
   })
 
   const unsubHidden = hiddenChannels.subscribe((hiddenChs) => {
     if (!deck) return
-    deck.setProps({ layers: buildLayers($entities, $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, hiddenChs) })
+    deck.setProps({ layers: buildLayers(activeMap(), $selectedId, $agentActions, $kernelConfig, $agentVisibleIds, $agentReceivedComms, hiddenChs) })
   })
 
   const unsubFocus = focusPoint.subscribe((pt) => {
@@ -435,6 +460,8 @@
 
   onDestroy(() => {
     unsubEntities()
+    unsubPerceivedEntities()
+    unsubPerceptionViewMode()
     unsubSel()
     unsubActions()
     unsubFocus()
@@ -447,7 +474,6 @@
 
 <canvas bind:this={canvas} class="sim-canvas"></canvas>
 
-
 <style>
   .sim-canvas {
     width: 100%;
@@ -455,5 +481,4 @@
     display: block;
     background: #0d1117;
   }
-
 </style>

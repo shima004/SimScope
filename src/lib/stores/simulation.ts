@@ -2,7 +2,7 @@ import { LogProto as LogProtoCodec } from "$lib/proto/RCRSLogProto";
 import type { ChangeSetProto, EntityProto } from "$lib/proto/RCRSProto";
 import { applyChanges, decodeEntity } from "$lib/rcrs/decoder";
 import type { SimEntity } from "$lib/rcrs/types";
-import { ComponentCommandURN, ComponentControlMsgURN } from "$lib/rcrs/urns";
+import { ComponentCommandURN, ComponentControlMsgURN, EntityURN, isAgent } from "$lib/rcrs/urns";
 import { extract7zAllFiles } from "$lib/sevenzip";
 import { derived, get, writable } from "svelte/store";
 
@@ -41,6 +41,12 @@ let commandTimeline: Map<number, Map<number, AgentAction>> = new Map();
  * Maps step → (agentId → visible entity ID array)
  */
 let perceptionTimeline: Map<number, Map<number, number[]>> = new Map();
+
+/**
+ * Per-timestep perception entity changes — only populated in file mode.
+ * Maps step → (agentId → ChangeSetProto of perceived entity states)
+ */
+let perceptionChangesTimeline: Map<number, Map<number, ChangeSetProto>> = new Map();
 
 /**
  * Per-timestep communication data — only populated in file mode.
@@ -83,6 +89,17 @@ export const selectedEntity = derived(
     $selectedId !== null ? ($entities.get($selectedId) ?? null) : null,
 );
 
+/** ピン止め中のエージェント ID */
+export const pinnedAgentId = writable<number | null>(null);
+
+/** ピン止め中のエージェントエンティティ */
+export const pinnedEntity = derived(
+  [entities, pinnedAgentId],
+  ([$entities, $pinnedAgentId]) =>
+    $pinnedAgentId !== null ? ($entities.get($pinnedAgentId) ?? null) : null,
+);
+
+
 /**
  * 選択中エージェントが現在ステップで知覚したエンティティIDのセット。
  * ファイルモードかつ知覚データがある場合のみ非 null。
@@ -94,6 +111,38 @@ export const agentVisibleIds = writable<Set<number> | null>(null);
  * ファイルモードかつ通信データがある場合のみ非 null。
  */
 export const agentReceivedComms = writable<CommMessage[] | null>(null);
+
+/**
+ * 知覚ビューモード: ON のとき選択エージェントの累積知識マップを表示する。
+ * ファイルモードかつエージェント選択時のみ有効。
+ */
+export const perceptionViewMode = writable(false);
+
+/**
+ * 知覚ビューで使うエンティティマップ（選択エージェントの累積知覚から再構築）。
+ */
+export const perceivedEntities = writable<Map<number, SimEntity>>(new Map());
+
+/**
+ * ピン止め中に別エンティティを参照するための一時選択 ID。
+ * ピン止めなし時は null。
+ */
+export const inspectedId = writable<number | null>(null);
+
+export const inspectedEntity = derived(
+  [entities, perceivedEntities, perceptionViewMode, inspectedId],
+  ([$entities, $perceivedEntities, $perceptionViewMode, $inspectedId]) => {
+    if ($inspectedId === null) return null;
+    const map = $perceptionViewMode ? $perceivedEntities : $entities;
+    return map.get($inspectedId) ?? null;
+  },
+);
+
+// ピン止め変化時: ON → selectedId をピン固定、OFF → inspectedId をクリア
+pinnedAgentId.subscribe(id => {
+  if (id !== null) selectedId.set(id);
+  else inspectedId.set(null);
+});
 
 function updatePerceptionState(step: number, selId: number | null) {
   if (selId === null) {
@@ -112,10 +161,65 @@ function updatePerceptionState(step: number, selId: number | null) {
 
   const comms = commTimeline.get(step)?.get(selId) ?? null;
   agentReceivedComms.set(comms?.length ? comms : null);
+
+  if (get(perceptionViewMode)) rebuildPerceivedWorld(step, selId);
 }
 
 // selectedId が変化したときも知覚データを更新
 selectedId.subscribe(selId => updatePerceptionState(get(currentStep), selId));
+
+// perceptionViewMode が ON になったとき即時再構築
+perceptionViewMode.subscribe(enabled => {
+  const selId = get(selectedId);
+  if (enabled && selId !== null) rebuildPerceivedWorld(get(currentStep), selId);
+  else if (!enabled) perceivedEntities.set(new Map());
+});
+
+/**
+ * 選択エージェントの累積知覚から「エージェントが認識している世界」を再構築する。
+ * - 道路・建物: 実際の変化 (火災等) を背景として適用し、知覚データで上書き
+ * - エージェント・瓦礫: 一度でも知覚したものだけ表示（最終知覚時の状態で固定）
+ */
+export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
+  // 1. ベースエンティティから開始（静的マップ知識）
+  const snapshot = new Map<number, SimEntity>(
+    Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }]),
+  );
+
+  // 2. エリア・建物の実際の変化を適用（火災・崩壊などの環境変化）
+  for (let s = 1; s <= targetStep; s++) {
+    const changes = timeline.get(s);
+    if (!changes) continue;
+    const areaOnly: ChangeSetProto = {
+      changes: changes.changes.filter(c => {
+        const e = snapshot.get(c.entityID);
+        return e && !isAgent(e.urn) && e.urn !== EntityURN.BLOCKADE;
+      }),
+      deletes: [],
+    };
+    if (areaOnly.changes.length > 0) applyChanges(snapshot, areaOnly);
+  }
+
+  // 3. 知覚データを累積適用し、知覚済みエンティティ ID を収集
+  const seenIds = new Set<number>();
+  for (let s = 1; s <= targetStep; s++) {
+    const percMap = perceptionChangesTimeline.get(s);
+    if (!percMap) continue;
+    const percChanges = percMap.get(agentId);
+    if (!percChanges) continue;
+    for (const c of percChanges.changes) seenIds.add(c.entityID);
+    applyChanges(snapshot, percChanges);
+  }
+
+  // 4. 一度も知覚していないエージェント・瓦礫を除去
+  for (const [id, e] of snapshot) {
+    if ((isAgent(e.urn) || e.urn === EntityURN.BLOCKADE) && !seenIds.has(id)) {
+      snapshot.delete(id);
+    }
+  }
+
+  perceivedEntities.set(snapshot);
+}
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
@@ -369,6 +473,9 @@ function handleLogFrame(frame: LogProtoMsg) {
     if (visible && visible.changes.length > 0) {
       if (!perceptionTimeline.has(time)) perceptionTimeline.set(time, new Map());
       perceptionTimeline.get(time)!.set(entityID, visible.changes.map(c => c.entityID));
+
+      if (!perceptionChangesTimeline.has(time)) perceptionChangesTimeline.set(time, new Map());
+      perceptionChangesTimeline.get(time)!.set(entityID, visible);
     }
     if (communications.length > 0) {
       const msgs: CommMessage[] = [];
@@ -416,6 +523,7 @@ function reset() {
   timeline = new Map();
   commandTimeline = new Map();
   perceptionTimeline = new Map();
+  perceptionChangesTimeline = new Map();
   commTimeline = new Map();
   entities.set(new Map());
   currentStep.set(0);
@@ -426,4 +534,8 @@ function reset() {
   agentActions.set(new Map());
   agentVisibleIds.set(null);
   agentReceivedComms.set(null);
+  perceptionViewMode.set(false);
+  perceivedEntities.set(new Map());
+  pinnedAgentId.set(null);
+  inspectedId.set(null);
 }

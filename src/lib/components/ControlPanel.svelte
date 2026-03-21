@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import {
+    agentVisibleIds,
     connected,
     connectWS,
     currentStep,
@@ -13,6 +14,7 @@
     loadUrl,
     maxStep,
     mode,
+    perceptionViewMode,
     seekToStep,
   } from '$lib/stores/simulation';
 
@@ -222,6 +224,15 @@
       onclick={() => followMode.update(v => !v)}
       title="選択中のエージェントに追従"
     >{$followMode ? '⊙ Follow ON' : '⊙ Follow OFF'}</button>
+  {/if}
+
+  {#if $mode === 'file' && $maxStep > 0}
+    <button
+      class="btn follow"
+      class:active={$perceptionViewMode}
+      onclick={() => perceptionViewMode.update(v => !v)}
+      title="選択エージェントの知覚世界を表示"
+    >{$perceptionViewMode ? '👁 Perception ON' : '👁 Perception OFF'}</button>
   {/if}
 </div>
 

@@ -1,18 +1,13 @@
 <script lang="ts">
-  import { agentReceivedComms, entities, selectedEntity, selectedId } from '$lib/stores/simulation'
+  import { agentReceivedComms, entities, inspectedEntity, inspectedId, pinnedAgentId, selectedEntity, selectedId } from '$lib/stores/simulation'
   import { EntityURNLabel, FIERYNESS_LABEL, EntityURN, entityColor, isAgent } from '$lib/rcrs/urns'
   import type { BuildingEntity, RefugeEntity, HumanEntity, BlockadeEntity, FireBrigadeEntity, AreaEntity } from '$lib/rcrs/types'
   import { channelColorCSS } from '$lib/rcrs/channelColors'
-
-  function close() {
-    selectedId.set(null)
-  }
 
   function typeLabel(urn: number) {
     return EntityURNLabel[urn] ?? `URN:${urn}`
   }
 
-  // 搬送中の市民を探す（市民の position が救急隊の ID と一致）
   function findCarriedCivilian(ambulanceId: number): HumanEntity | null {
     for (const e of $entities.values()) {
       if (e.urn === EntityURN.CIVILIAN) {
@@ -22,18 +17,18 @@
     }
     return null
   }
+
+  function togglePin(id: number) {
+    pinnedAgentId.update(v => v === id ? null : id)
+  }
+
+  // ピン止め中かつ別エンティティを参照している状態
+  const showDual = $derived($pinnedAgentId !== null && $inspectedEntity !== null)
 </script>
 
-{#if $selectedEntity}
-  {@const e = $selectedEntity}
-  <aside class="panel">
-    <header>
-      <span class="type-badge">{typeLabel(e.urn)}</span>
-      <span class="entity-id" style="color:{entityColor(e.urn, 'hp' in e ? (e as HumanEntity).hp : 10000)}">#{e.id}</span>
-      <button class="close-btn" onclick={close} aria-label="Close">✕</button>
-    </header>
-
-    <div class="props">
+{#snippet entityProps(e: ReturnType<typeof $selectedEntity>, isPinned: boolean)}
+  <div class="props">
+    {#if e}
       <!-- Position -->
       {#if 'x' in e && 'y' in e}
         <div class="row">
@@ -52,9 +47,7 @@
         <div class="row">
           <span class="key">Brokenness</span>
           <span class="val">
-            <span class="bar-wrap">
-              <span class="bar" style="width:{b.brokenness}%"></span>
-            </span>
+            <span class="bar-wrap"><span class="bar" style="width:{b.brokenness}%"></span></span>
             {b.brokenness}%
           </span>
         </div>
@@ -74,9 +67,7 @@
         <div class="row">
           <span class="key">HP</span>
           <span class="val">
-            <span class="bar-wrap">
-              <span class="bar hp" style="width:{Math.min(100, h.hp / 100)}%"></span>
-            </span>
+            <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, h.hp / 100)}%"></span></span>
             {h.hp.toLocaleString()}
           </span>
         </div>
@@ -105,9 +96,7 @@
         <div class="row">
           <span class="key">Beds</span>
           <span class="val">
-            <span class="bar-wrap">
-              <span class="bar refuge" style="width:{pct}%"></span>
-            </span>
+            <span class="bar-wrap"><span class="bar refuge" style="width:{pct}%"></span></span>
             {r.occupiedBeds} / {r.bedCapacity}
           </span>
         </div>
@@ -121,13 +110,11 @@
       {#if e.urn === EntityURN.AMBULANCE_TEAM}
         {@const carried = findCarriedCivilian(e.id)}
         {#if carried}
-          <div class="section-label">Carrying #{ carried.id}</div>
+          <div class="section-label">Carrying #{carried.id}</div>
           <div class="row">
             <span class="key">HP</span>
             <span class="val">
-              <span class="bar-wrap">
-                <span class="bar hp" style="width:{Math.min(100, carried.hp / 100)}%"></span>
-              </span>
+              <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, carried.hp / 100)}%"></span></span>
               {carried.hp.toLocaleString()}
             </span>
           </div>
@@ -168,8 +155,8 @@
         </div>
       {/if}
 
-      <!-- Received communications (file mode, agent only) -->
-      {#if isAgent(e.urn) && $agentReceivedComms}
+      <!-- Received communications — ピン止めパネル非表示、選択パネルのみ -->
+      {#if !isPinned && isAgent(e.urn) && $agentReceivedComms}
         {@const sortedComms = [...$agentReceivedComms].sort((a, b) => a.channel - b.channel)}
         <div class="section-label">Communications ({$agentReceivedComms.length})</div>
         <div class="comm-list">
@@ -179,7 +166,7 @@
             <div class="comm-entry" style="--ch-color:{chColor}">
               <div class="comm-header">
                 <span class="comm-type">{EntityURNLabel[sender?.urn ?? 0] ?? 'Unknown'}</span>
-                <button class="comm-id" onclick={() => selectedId.set(msg.senderId)}>
+                <button class="comm-id" onclick={() => $pinnedAgentId !== null ? inspectedId.set(msg.senderId) : selectedId.set(msg.senderId)}>
                   #{msg.senderId}
                 </button>
                 <span class="comm-ch">ch.{msg.channel}</span>
@@ -191,15 +178,71 @@
           {/each}
         </div>
       {/if}
-    </div>
-  </aside>
+    {/if}
+  </div>
+{/snippet}
+
+<!-- ── Layout ─────────────────────────────────────────────────────────────── -->
+
+{#if $selectedEntity || $pinnedAgentId}
+  <div class="panel-group">
+
+    <!-- 追加パネル（左側）— ピン止め中に別エンティティを参照中のみ -->
+    {#if showDual && $inspectedEntity}
+      {@const e = $inspectedEntity}
+      <aside class="panel">
+        <header>
+          <span class="type-badge">{typeLabel(e.urn)}</span>
+          <span class="entity-id" style="color:{entityColor(e.urn, 'hp' in e ? (e as HumanEntity).hp : 10000)}">#{e.id}</span>
+          {#if isAgent(e.urn)}
+            <button
+              class="pin-btn"
+              onclick={() => { pinnedAgentId.set(null); selectedId.set(e.id) }}
+              title="こちらをピン止めに切り替え"
+            >📌</button>
+          {/if}
+          <button class="close-btn" onclick={() => inspectedId.set(null)} aria-label="Close">✕</button>
+        </header>
+        {@render entityProps(e, false)}
+      </aside>
+    {/if}
+
+    <!-- メインパネル（右側）— 常にピン止め or 選択中エージェントを表示 -->
+    {#if $selectedEntity}
+      {@const e = $selectedEntity}
+      <aside class="panel" class:panel-pinned={$pinnedAgentId !== null}>
+        <header>
+          <span class="type-badge" class:pinned-label={$pinnedAgentId !== null}>{typeLabel(e.urn)}</span>
+          <span class="entity-id" style="color:{entityColor(e.urn, 'hp' in e ? (e as HumanEntity).hp : 10000)}">#{e.id}</span>
+          {#if isAgent(e.urn)}
+            <button
+              class="pin-btn"
+              class:active={$pinnedAgentId === e.id}
+              onclick={() => togglePin(e.id)}
+              title={$pinnedAgentId === e.id ? 'ピン止め解除' : 'ピン止め'}
+            >📌</button>
+          {/if}
+          <button class="close-btn" onclick={() => { pinnedAgentId.set(null); selectedId.set(null) }} aria-label="Close">✕</button>
+        </header>
+        {@render entityProps(e, false)}
+      </aside>
+    {/if}
+
+  </div>
 {/if}
 
 <style>
-  .panel {
+  .panel-group {
     position: absolute;
     top: 12px;
     right: 12px;
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .panel {
     width: 260px;
     background: rgba(13, 20, 30, 0.92);
     border: 1px solid rgba(0, 200, 255, 0.2);
@@ -211,12 +254,23 @@
     z-index: 10;
   }
 
+  .panel-pinned {
+    border-color: rgba(255, 200, 60, 0.3);
+    box-shadow: 0 0 20px rgba(255, 200, 60, 0.06);
+  }
+
+  .pinned-label { color: #ffc840; }
+
   header {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
     border-bottom: 1px solid rgba(0, 200, 255, 0.1);
+  }
+
+  .panel-pinned header {
+    border-bottom-color: rgba(255, 200, 60, 0.15);
   }
 
   .type-badge {
@@ -231,6 +285,25 @@
     flex: 1;
     color: #607080;
     font-size: 11px;
+  }
+
+  .pin-btn {
+    background: none;
+    border: none;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    opacity: 0.35;
+    filter: grayscale(1);
+    transition: opacity 0.15s, filter 0.15s;
+  }
+  .pin-btn:hover  { opacity: 0.7; filter: grayscale(0.3); }
+  .pin-btn.active { opacity: 1;   filter: grayscale(0); }
+
+  .pin-indicator {
+    font-size: 13px;
+    line-height: 1;
   }
 
   .close-btn {
