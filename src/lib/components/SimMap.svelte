@@ -52,7 +52,7 @@
     [EntityURN.AMBULANCE_CENTRE]: [60, 160, 220], // 救急センター: 水色
     [EntityURN.POLICE_OFFICE]: [80, 80, 220], // 警察署: 青
     [EntityURN.GAS_STATION]: [220, 180, 40], // ガスステーション: 黄
-    [EntityURN.HYDRANT]: [40, 220, 220], // 消火栓: シアン
+    [EntityURN.HYDRANT]: [30, 100, 140], // 消火栓: 暗い水色
   };
 
   function buildingColor(e: BuildingEntity): [number, number, number, number] {
@@ -121,7 +121,7 @@
     const agents: HumanEntity[] = [];
 
     for (const e of emap.values()) {
-      if (e.urn === EntityURN.ROAD) roads.push(e as RoadEntity);
+      if (e.urn === EntityURN.ROAD || e.urn === EntityURN.HYDRANT) roads.push(e as RoadEntity);
       else if (isBuilding(e.urn)) buildings.push(e as BuildingEntity);
       else if (e.urn === EntityURN.BLOCKADE)
         blockades.push(e as BlockadeEntity);
@@ -190,7 +190,8 @@
         id: "roads",
         data: roads,
         getPolygon: (d: RoadEntity) => d.apexes,
-        getFillColor: [45, 55, 70, 200],
+        getFillColor: (d: RoadEntity) =>
+          d.urn === EntityURN.HYDRANT ? [30, 100, 140, 220] : [45, 55, 70, 200],
         getLineColor: [70, 85, 105, 255],
         lineWidthMinPixels: 0.5,
         pickable: true,
