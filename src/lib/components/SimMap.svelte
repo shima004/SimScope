@@ -382,7 +382,7 @@
             widthMinPixels: 1,
             widthMaxPixels: 3,
             updateTriggers: { getColor: [filteredComms] },
-          }),
+          }) as unknown as LineLayer<unknown>,
           new ScatterplotLayer<SenderEntry>({
             id: "comm-senders",
             data: senderData,
@@ -404,7 +404,7 @@
             lineWidthMaxPixels: 4,
             pickable: false,
             updateTriggers: { getLineColor: [filteredComms] },
-          }),
+          }) as unknown as ScatterplotLayer<unknown>,
         ];
       })(),
 

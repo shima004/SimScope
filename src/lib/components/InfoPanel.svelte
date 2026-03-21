@@ -49,7 +49,7 @@
   );
 </script>
 
-{#snippet entityProps(e: ReturnType<typeof $selectedEntity>, isPinned: boolean)}
+{#snippet entityProps(e: AreaEntity | BlockadeEntity | HumanEntity | null, isPinned: boolean)}
   <div class="props">
     {#if e}
       <!-- Position -->
