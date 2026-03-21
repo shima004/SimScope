@@ -8,6 +8,7 @@ import {
   ComponentControlMsgURN,
   EntityURN,
   isAgent,
+  isArea,
 } from "$lib/rcrs/urns";
 import { extract7zAllFiles } from "$lib/sevenzip";
 import { derived, get, writable } from "svelte/store";
@@ -235,12 +236,22 @@ export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
   // 3. 一度も知覚していないエージェント・瓦礫を除去
   // （知覚データが一件もない場合は除去しない＝初期世界をそのまま表示）
   if (seenIds.size > 0) {
+    // エリアの blockades リストに載っている瓦礫 ID を収集
+    const referencedBlockades = new Set<number>();
+    for (const e of snapshot.values()) {
+      if (isArea(e.urn) && 'blockades' in e) {
+        for (const bid of (e as { blockades: number[] }).blockades)
+          referencedBlockades.add(bid);
+      }
+    }
+
     for (const [id, e] of snapshot) {
-      if (
-        (isAgent(e.urn) || e.urn === EntityURN.BLOCKADE) &&
-        !seenIds.has(id)
-      ) {
+      if (isAgent(e.urn) && !seenIds.has(id)) {
         snapshot.delete(id);
+      } else if (e.urn === EntityURN.BLOCKADE) {
+        // 知覚したことがない、またはいずれのエリアにも参照されていない瓦礫を除去
+        if (!seenIds.has(id) || !referencedBlockades.has(id))
+          snapshot.delete(id);
       }
     }
   }
