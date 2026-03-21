@@ -1,8 +1,10 @@
+// prettier-ignore
 export const ENTITY_URN_PREFIX    = 0x1100 // 4352
-export const PROPERTY_URN_PREFIX  = 0x1200 // 4608
-export const COMMAND_URN_PREFIX   = 0x1300 // 4864
-export const COMP_CMD_URN_PREFIX  = 0x1400 // 5120
+export const PROPERTY_URN_PREFIX = 0x1200; // 4608
+export const COMMAND_URN_PREFIX = 0x1300; // 4864
+export const COMP_CMD_URN_PREFIX = 0x1400; // 5120
 
+// prettier-ignore
 export const EntityURN = {
   WORLD:            ENTITY_URN_PREFIX | 1,  // 4353
   ROAD:             ENTITY_URN_PREFIX | 2,  // 4354
@@ -20,6 +22,7 @@ export const EntityURN = {
   POLICE_FORCE:     ENTITY_URN_PREFIX | 14, // 4366
 } as const
 
+// prettier-ignore
 export const PropertyURN = {
   START_TIME:           PROPERTY_URN_PREFIX | 1,  // 4609
   LONGITUDE:            PROPERTY_URN_PREFIX | 2,  // 4610
@@ -58,6 +61,7 @@ export const PropertyURN = {
   WAITING_LIST_SIZE:    PROPERTY_URN_PREFIX | 35, // 4643
 } as const
 
+// prettier-ignore
 export const EntityURNLabel: Record<number, string> = {
   [EntityURN.WORLD]:            'World',
   [EntityURN.ROAD]:             'Road',
@@ -75,6 +79,7 @@ export const EntityURNLabel: Record<number, string> = {
   [EntityURN.POLICE_FORCE]:     'Police Force',
 }
 
+// prettier-ignore
 // urn → human-readable label for InfoPanel
 export const PropertyURNLabel: Record<number, string> = {
   [PropertyURN.X]:                    'X',
@@ -102,6 +107,7 @@ export const PropertyURNLabel: Record<number, string> = {
   [PropertyURN.WAITING_LIST_SIZE]:    'Waiting List Size',
 }
 
+// prettier-ignore
 export const FIERYNESS_LABEL: Record<number, string> = {
   0: 'Unburned',
   1: 'Heating',
@@ -114,6 +120,7 @@ export const FIERYNESS_LABEL: Record<number, string> = {
   8: 'Completely Burned',
 }
 
+// prettier-ignore
 export const CommandURN = {
   AK_REST:       COMMAND_URN_PREFIX | 0x01, // 0x1301
   AK_MOVE:       COMMAND_URN_PREFIX | 0x02, // 0x1302
@@ -129,6 +136,7 @@ export const CommandURN = {
   AK_SPEAK:      COMMAND_URN_PREFIX | 0x0c, // 0x130c
 } as const
 
+// prettier-ignore
 export const CommandURNLabel: Record<number, string> = {
   [CommandURN.AK_REST]:       'Rest',
   [CommandURN.AK_MOVE]:       'Move',
@@ -144,6 +152,7 @@ export const CommandURNLabel: Record<number, string> = {
   [CommandURN.AK_SPEAK]:      'Speak',
 }
 
+// prettier-ignore
 export const ComponentCommandURN = {
   Target:       COMP_CMD_URN_PREFIX | 0x01, // 0x1401
   DestinationX: COMP_CMD_URN_PREFIX | 0x02, // 0x1402
@@ -155,6 +164,7 @@ export const ComponentCommandURN = {
   Channels:     COMP_CMD_URN_PREFIX | 0x08, // 0x1408
 } as const
 
+// prettier-ignore
 export const ControlMsgURN = {
   KG_CONNECT:          0x0101,
   KG_ACKNOWLEDGE:      0x0102,
@@ -183,6 +193,7 @@ export const ControlMsgURN = {
   ENTITY_ID_RESPONSE:  0x0119,
 } as const
 
+// prettier-ignore
 export const ComponentControlMsgURN = {
   RequestID:            0x0201,
   AgentID:              0x0202,
@@ -211,29 +222,36 @@ export const ComponentControlMsgURN = {
 /** エンティティ種別に対応する CSS カラー文字列を返す */
 export function entityColor(urn: number, hp = 10000): string {
   switch (urn) {
-    case EntityURN.FIRE_BRIGADE:   return '#dc1e1e'
-    case EntityURN.AMBULANCE_TEAM: return '#f0f0f0'
-    case EntityURN.POLICE_FORCE:   return '#3c8cff'
+    case EntityURN.FIRE_BRIGADE:
+      return "#dc1e1e";
+    case EntityURN.AMBULANCE_TEAM:
+      return "#f0f0f0";
+    case EntityURN.POLICE_FORCE:
+      return "#3c8cff";
     case EntityURN.CIVILIAN: {
-      const t = Math.max(0, Math.min(1, hp / 10000))
-      const r = Math.round(60  * t)
-      const g = Math.round(200 * t)
-      const b = Math.round(80  * t)
-      return `rgb(${r},${g},${b})`
+      const t = Math.max(0, Math.min(1, hp / 10000));
+      const r = Math.round(60 * t);
+      const g = Math.round(200 * t);
+      const b = Math.round(80 * t);
+      return `rgb(${r},${g},${b})`;
     }
-    default: return '#607080'
+    default:
+      return "#607080";
   }
 }
 
 export function isAgent(urn: number): boolean {
-  return urn === EntityURN.CIVILIAN ||
+  return (
+    urn === EntityURN.CIVILIAN ||
     urn === EntityURN.FIRE_BRIGADE ||
     urn === EntityURN.AMBULANCE_TEAM ||
     urn === EntityURN.POLICE_FORCE
+  );
 }
 
 export function isArea(urn: number): boolean {
-  return urn === EntityURN.ROAD ||
+  return (
+    urn === EntityURN.ROAD ||
     urn === EntityURN.BUILDING ||
     urn === EntityURN.REFUGE ||
     urn === EntityURN.HYDRANT ||
@@ -241,13 +259,16 @@ export function isArea(urn: number): boolean {
     urn === EntityURN.FIRE_STATION ||
     urn === EntityURN.AMBULANCE_CENTRE ||
     urn === EntityURN.POLICE_OFFICE
+  );
 }
 
 export function isBuilding(urn: number): boolean {
-  return urn === EntityURN.BUILDING ||
+  return (
+    urn === EntityURN.BUILDING ||
     urn === EntityURN.REFUGE ||
     urn === EntityURN.GAS_STATION ||
     urn === EntityURN.FIRE_STATION ||
     urn === EntityURN.AMBULANCE_CENTRE ||
     urn === EntityURN.POLICE_OFFICE
+  );
 }
