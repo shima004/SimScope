@@ -262,6 +262,14 @@ export function isArea(urn: number): boolean {
   );
 }
 
+export function isCommandCenter(urn: number): boolean {
+  return (
+    urn === EntityURN.FIRE_STATION ||
+    urn === EntityURN.AMBULANCE_CENTRE ||
+    urn === EntityURN.POLICE_OFFICE
+  );
+}
+
 export function isBuilding(urn: number): boolean {
   return (
     urn === EntityURN.BUILDING ||

@@ -14,6 +14,7 @@
     FIERYNESS_LABEL,
     entityColor,
     isAgent,
+    isCommandCenter,
   } from "$lib/rcrs/urns";
   import {
     agentReceivedComms,
@@ -257,7 +258,7 @@
               'hp' in e ? (e as HumanEntity).hp : 10000,
             )}">#{e.id}</span
           >
-          {#if isAgent(e.urn)}
+          {#if isAgent(e.urn) || isCommandCenter(e.urn)}
             <button
               class="pin-btn"
               onclick={() => {
@@ -291,7 +292,7 @@
               'hp' in e ? (e as HumanEntity).hp : 10000,
             )}">#{e.id}</span
           >
-          {#if isAgent(e.urn)}
+          {#if isAgent(e.urn) || isCommandCenter(e.urn)}
             <button
               class="pin-btn"
               class:active={$pinnedAgentId === e.id}
