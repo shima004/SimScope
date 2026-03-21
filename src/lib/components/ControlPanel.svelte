@@ -13,103 +13,106 @@
     maxStep,
     mode,
     perceptionViewMode,
-    seekToStep
-  } from '$lib/stores/simulation';
-  import { onMount } from 'svelte';
+    seekToStep,
+  } from "$lib/stores/simulation";
+  import { onMount } from "svelte";
 
   // /proxy?host=<tcp-host>&port=<tcp-port> → Vite の tcpWsProxyPlugin が中継
-  const _q = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
-  let tcpHost = $state(_q.get('host') ?? 'localhost')
-  let tcpPort = $state(_q.get('port') ?? '27931')
+  const _q =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search)
+      : new URLSearchParams();
+  let tcpHost = $state(_q.get("host") ?? "localhost");
+  let tcpPort = $state(_q.get("port") ?? "27931");
   const wsUrl = $derived(
-    `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost:5173'}/proxy?host=${tcpHost}&port=${tcpPort}`
-  )
-  let fileInput: HTMLInputElement
-  let logUrl = $state(_q.get('url') ?? '')
+    `ws://${typeof window !== "undefined" ? window.location.host : "localhost:5173"}/proxy?host=${tcpHost}&port=${tcpPort}`,
+  );
+  let fileInput: HTMLInputElement;
+  let logUrl = $state(_q.get("url") ?? "");
 
   onMount(async () => {
-    const initialUrl = _q.get('url')
-    const hasServer = _q.has('host') || _q.has('port')
+    const initialUrl = _q.get("url");
+    const hasServer = _q.has("host") || _q.has("port");
     if (initialUrl) {
-      const result = await loadUrl(initialUrl)
-      if (result === 'not_found' && hasServer) connectWS(wsUrl)
+      const result = await loadUrl(initialUrl);
+      if (result === "not_found" && hasServer) connectWS(wsUrl);
     } else if (hasServer) {
-      connectWS(wsUrl)
+      connectWS(wsUrl);
     }
-  })
-  let playing = $state(false)
-  let playInterval: ReturnType<typeof setInterval> | null = null
-  let showConfig = $state(false)
-  let openGroups = $state<Set<string>>(new Set())
+  });
+  let playing = $state(false);
+  let playInterval: ReturnType<typeof setInterval> | null = null;
+  let showConfig = $state(false);
+  let openGroups = $state<Set<string>>(new Set());
 
   const configGroups = $derived.by(() => {
-    const map = new Map<string, { subkey: string; value: string }[]>()
+    const map = new Map<string, { subkey: string; value: string }[]>();
     for (const [k, v] of Object.entries($kernelConfig).sort()) {
-      const dot = k.indexOf('.')
-      const prefix = dot >= 0 ? k.slice(0, dot) : k
-      const sub    = dot >= 0 ? k.slice(dot + 1) : ''
-      if (!map.has(prefix)) map.set(prefix, [])
-      map.get(prefix)!.push({ subkey: sub, value: v })
+      const dot = k.indexOf(".");
+      const prefix = dot >= 0 ? k.slice(0, dot) : k;
+      const sub = dot >= 0 ? k.slice(dot + 1) : "";
+      if (!map.has(prefix)) map.set(prefix, []);
+      map.get(prefix)!.push({ subkey: sub, value: v });
     }
-    return map
-  })
+    return map;
+  });
 
   function toggleGroup(g: string) {
     openGroups = new Set(
       openGroups.has(g)
-        ? [...openGroups].filter(x => x !== g)
-        : [...openGroups, g]
-    )
+        ? [...openGroups].filter((x) => x !== g)
+        : [...openGroups, g],
+    );
   }
 
   function handleConnect() {
-    connectWS(wsUrl)
+    connectWS(wsUrl);
   }
 
   function handleFileChange(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0]
-    if (file) loadFile(file)
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (file) loadFile(file);
   }
 
   function handleSeek(e: Event) {
-    seekToStep(Number((e.target as HTMLInputElement).value))
+    seekToStep(Number((e.target as HTMLInputElement).value));
   }
 
   function stepBack() {
-    seekToStep(Math.max(0, $currentStep - 1))
+    seekToStep(Math.max(0, $currentStep - 1));
   }
 
   function stepForward() {
-    seekToStep(Math.min($maxStep, $currentStep + 1))
+    seekToStep(Math.min($maxStep, $currentStep + 1));
   }
 
   function togglePlay() {
     if (playing) {
-      clearInterval(playInterval!)
-      playInterval = null
-      playing = false
+      clearInterval(playInterval!);
+      playInterval = null;
+      playing = false;
     } else {
-      playing = true
+      playing = true;
       playInterval = setInterval(() => {
         if ($currentStep >= $maxStep) {
-          clearInterval(playInterval!)
-          playInterval = null
-          playing = false
-          return
+          clearInterval(playInterval!);
+          playInterval = null;
+          playing = false;
+          return;
         }
-        seekToStep($currentStep + 1)
-      }, 200)
+        seekToStep($currentStep + 1);
+      }, 200);
     }
   }
 
   $effect(() => {
     // モードが変わったら自動再生を停止
-    if ($mode !== 'file') {
-      clearInterval(playInterval!)
-      playInterval = null
-      playing = false
+    if ($mode !== "file") {
+      clearInterval(playInterval!);
+      playInterval = null;
+      playing = false;
     }
-  })
+  });
 </script>
 
 <div class="ctrl-panel">
@@ -121,23 +124,25 @@
         class="url-input"
         bind:value={tcpHost}
         placeholder="host"
-        disabled={$mode === 'ws'}
+        disabled={$mode === "ws"}
       />
       <input
         class="port-input"
         bind:value={tcpPort}
         placeholder="port"
-        disabled={$mode === 'ws'}
+        disabled={$mode === "ws"}
       />
-      {#if $mode === 'ws'}
+      {#if $mode === "ws"}
         <button class="btn danger" onclick={disconnectWS}>Cut</button>
       {:else}
-        <button class="btn primary" onclick={handleConnect} disabled={$loading}>Connect</button>
+        <button class="btn primary" onclick={handleConnect} disabled={$loading}
+          >Connect</button
+        >
       {/if}
     </div>
-    {#if $mode === 'ws'}
+    {#if $mode === "ws"}
       <div class="status" class:online={$connected} class:offline={!$connected}>
-        {$connected ? '● Connected' : '○ Reconnecting…'}
+        {$connected ? "● Connected" : "○ Reconnecting…"}
       </div>
     {/if}
   </section>
@@ -153,7 +158,7 @@
         onclick={() => fileInput.click()}
         disabled={$loading}
       >
-        {$loading ? 'Loading…' : 'Open 7z tgz tar.gz log file'}
+        {$loading ? "Loading…" : "Open 7z tgz tar.gz log file"}
       </button>
       <input
         bind:this={fileInput}
@@ -173,8 +178,8 @@
       <button
         class="btn primary"
         onclick={() => loadUrl(logUrl)}
-        disabled={$loading || !logUrl}
-      >Load</button>
+        disabled={$loading || !logUrl}>Load</button
+      >
     </div>
   </section>
 
@@ -183,7 +188,7 @@
   {/if}
 
   <!-- Timeline (file mode) -->
-  {#if $mode === 'file' && $maxStep > 0}
+  {#if $mode === "file" && $maxStep > 0}
     <section class="timeline">
       <div class="timeline-header">
         <span class="section-label">Step</span>
@@ -197,58 +202,89 @@
         oninput={handleSeek}
       />
       <div class="playback-row">
-        <button class="btn icon" onclick={stepBack}     disabled={$currentStep <= 0}        aria-label="1ステップ戻る">⏮</button>
-        <button class="btn icon play" onclick={togglePlay} aria-label={playing ? '一時停止' : '自動再生'}>
-          {playing ? '⏸' : '▶'}
+        <button
+          class="btn icon"
+          onclick={stepBack}
+          disabled={$currentStep <= 0}
+          aria-label="1ステップ戻る">⏮</button
+        >
+        <button
+          class="btn icon play"
+          onclick={togglePlay}
+          aria-label={playing ? "一時停止" : "自動再生"}
+        >
+          {playing ? "⏸" : "▶"}
         </button>
-        <button class="btn icon" onclick={stepForward} disabled={$currentStep >= $maxStep} aria-label="1ステップ進む">⏭</button>
+        <button
+          class="btn icon"
+          onclick={stepForward}
+          disabled={$currentStep >= $maxStep}
+          aria-label="1ステップ進む">⏭</button
+        >
       </div>
     </section>
   {/if}
 
   <!-- Live step counter (WS mode) -->
-  {#if $mode === 'ws' && $currentStep > 0}
+  {#if $mode === "ws" && $currentStep > 0}
     <div class="live-step">Step {$currentStep}</div>
   {/if}
 
   <!-- Kernel config button (WS mode) -->
   {#if Object.keys($kernelConfig).length > 0}
-    <button class="btn primary" onclick={() => showConfig = true}>Kernel Config</button>
+    <button class="btn primary" onclick={() => (showConfig = true)}
+      >Kernel Config</button
+    >
   {/if}
 
-  {#if $mode !== 'idle' && $maxStep > 0}
+  {#if $mode !== "idle" && $maxStep > 0}
     <button
       class="btn follow"
       class:active={$followMode}
-      onclick={() => followMode.update(v => !v)}
+      onclick={() => followMode.update((v) => !v)}
       title="選択中のエージェントに追従"
-    >{$followMode ? '⊙ Follow ON' : '⊙ Follow OFF'}</button>
+      >{$followMode ? "⊙ Follow ON" : "⊙ Follow OFF"}</button
+    >
   {/if}
 
-  {#if $mode === 'file' && $maxStep > 0}
+  {#if $mode === "file" && $maxStep > 0}
     <button
       class="btn follow"
       class:active={$perceptionViewMode}
-      onclick={() => perceptionViewMode.update(v => !v)}
+      onclick={() => perceptionViewMode.update((v) => !v)}
       title="選択エージェントの知覚世界を表示"
-    >{$perceptionViewMode ? '👁 Perception ON' : '👁 Perception OFF'}</button>
+      >{$perceptionViewMode ? "👁 Perception ON" : "👁 Perception OFF"}</button
+    >
   {/if}
 </div>
 
 <!-- Kernel config overlay -->
 {#if showConfig}
-  <div class="overlay-backdrop" role="presentation" onclick={() => showConfig = false} onkeydown={(e) => e.key === 'Escape' && (showConfig = false)}>
-    <div class="overlay-panel" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+  <div
+    class="overlay-backdrop"
+    role="presentation"
+    onclick={() => (showConfig = false)}
+    onkeydown={(e) => e.key === "Escape" && (showConfig = false)}
+  >
+    <div
+      class="overlay-panel"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
       <div class="overlay-header">
         <span class="section-label">Kernel Config</span>
-        <button class="close-btn" onclick={() => showConfig = false}>✕</button>
+        <button class="close-btn" onclick={() => (showConfig = false)}>✕</button
+        >
       </div>
       <div class="config-table">
         {#each configGroups as [group, entries]}
           {@const open = openGroups.has(group)}
           <div class="config-group">
             <button class="group-header" onclick={() => toggleGroup(group)}>
-              <span class="group-arrow">{open ? '▾' : '▸'}</span>
+              <span class="group-arrow">{open ? "▾" : "▸"}</span>
               <span class="group-name">{group}</span>
               <span class="group-count">{entries.length}</span>
             </button>
@@ -256,7 +292,9 @@
               <div class="group-body">
                 {#each entries as { subkey, value }}
                   <div class="config-row">
-                    <span class="config-key" title={subkey}>{subkey || '(value)'}</span>
+                    <span class="config-key" title={subkey}
+                      >{subkey || "(value)"}</span
+                    >
                     <span class="config-val">{value}</span>
                   </div>
                 {/each}
@@ -304,26 +342,30 @@
 
   .url-input {
     flex: 1;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
     color: #c8d8e8;
     font-size: 12px;
     padding: 5px 8px;
     min-width: 0;
   }
-  .url-input:disabled { opacity: 0.5; }
+  .url-input:disabled {
+    opacity: 0.5;
+  }
 
   .port-input {
     width: 52px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
     color: #c8d8e8;
     font-size: 12px;
     padding: 5px 6px;
   }
-  .port-input:disabled { opacity: 0.5; }
+  .port-input:disabled {
+    opacity: 0.5;
+  }
 
   .btn {
     border: none;
@@ -338,24 +380,46 @@
     border: 1px solid rgba(0, 200, 255, 0.3);
     color: #00c8ff;
   }
-  .btn.primary:hover { background: rgba(0, 180, 255, 0.25); }
-  .btn.follow { border: 1px solid rgba(0, 200, 255, 0.6); color: #00c8ff; background: rgba(0, 180, 255, 0.12); }
-  .btn.follow:hover { border-color: rgba(0, 200, 255, 0.4); color: #a8c8d8; }
-  .btn.follow.active { border: 1px solid rgba(255, 200, 60, 0.5); color: #ffc840; background: rgba(255, 200, 60, 0.1); }
+  .btn.primary:hover {
+    background: rgba(0, 180, 255, 0.25);
+  }
+  .btn.follow {
+    border: 1px solid rgba(0, 200, 255, 0.6);
+    color: #00c8ff;
+    background: rgba(0, 180, 255, 0.12);
+  }
+  .btn.follow:hover {
+    border-color: rgba(0, 200, 255, 0.4);
+    color: #a8c8d8;
+  }
+  .btn.follow.active {
+    border: 1px solid rgba(255, 200, 60, 0.5);
+    color: #ffc840;
+    background: rgba(255, 200, 60, 0.1);
+  }
   .btn.danger {
     background: rgba(255, 60, 60, 0.12);
     border: 1px solid rgba(255, 80, 80, 0.3);
     color: #ff6060;
   }
-  .btn.danger:hover { background: rgba(255, 60, 60, 0.22); }
-  .btn:disabled { opacity: 0.4; cursor: default; }
+  .btn.danger:hover {
+    background: rgba(255, 60, 60, 0.22);
+  }
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
 
   .status {
     font-size: 11px;
     margin-top: 4px;
   }
-  .status.online  { color: #40c870; }
-  .status.offline { color: #c08040; }
+  .status.online {
+    color: #40c870;
+  }
+  .status.offline {
+    color: #c08040;
+  }
 
   .divider {
     text-align: center;
@@ -403,21 +467,26 @@
   }
 
   .btn.icon {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: #a8c8d8;
     padding: 4px 10px;
     font-size: 11px;
     border-radius: 4px;
   }
-  .btn.icon:hover:not(:disabled) { background: rgba(0, 180, 255, 0.15); color: #00c8ff; }
+  .btn.icon:hover:not(:disabled) {
+    background: rgba(0, 180, 255, 0.15);
+    color: #00c8ff;
+  }
   .btn.icon.play {
     background: rgba(0, 180, 255, 0.12);
     border-color: rgba(0, 200, 255, 0.3);
     color: #00c8ff;
     min-width: 36px;
   }
-  .btn.icon.play:hover { background: rgba(0, 180, 255, 0.25); }
+  .btn.icon.play:hover {
+    background: rgba(0, 180, 255, 0.25);
+  }
 
   .live-step {
     font-size: 11px;
@@ -465,7 +534,10 @@
     padding: 2px 6px;
     border-radius: 4px;
   }
-  .close-btn:hover { color: #a8c8d8; background: rgba(255,255,255,0.05); }
+  .close-btn:hover {
+    color: #a8c8d8;
+    background: rgba(255, 255, 255, 0.05);
+  }
 
   .config-table {
     display: flex;
@@ -491,7 +563,9 @@
     text-align: left;
     width: 100%;
   }
-  .group-header:hover { background: rgba(0, 180, 255, 0.12); }
+  .group-header:hover {
+    background: rgba(0, 180, 255, 0.12);
+  }
 
   .group-arrow {
     font-size: 10px;
@@ -527,7 +601,7 @@
     gap: 12px;
     font-size: 11px;
     padding: 2px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     line-height: 1.4;
   }
 

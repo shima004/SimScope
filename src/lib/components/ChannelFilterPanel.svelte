@@ -1,36 +1,44 @@
 <script lang="ts">
-  import { kernelConfig, hiddenChannels, currentSpeakStats } from '$lib/stores/simulation'
-  import { channelColorCSS } from '$lib/rcrs/channelColors'
+  import { channelColorCSS } from "$lib/rcrs/channelColors";
+  import {
+    currentSpeakStats,
+    hiddenChannels,
+    kernelConfig,
+  } from "$lib/stores/simulation";
 
   interface ChannelInfo {
-    index: number
-    type: 'voice' | 'radio' | string
-    bandwidth?: number
-    range?: number
+    index: number;
+    type: "voice" | "radio" | string;
+    bandwidth?: number;
+    range?: number;
   }
 
   const channels = $derived.by((): ChannelInfo[] => {
-    const cfg = $kernelConfig
-    const result: ChannelInfo[] = []
+    const cfg = $kernelConfig;
+    const result: ChannelInfo[] = [];
     for (let i = 0; ; i++) {
-      const type = cfg[`comms.channels.${i}.type`]
-      if (!type) break
+      const type = cfg[`comms.channels.${i}.type`];
+      if (!type) break;
       result.push({
         index: i,
         type,
-        bandwidth: cfg[`comms.channels.${i}.bandwidth`] ? Number(cfg[`comms.channels.${i}.bandwidth`]) : undefined,
-        range:     cfg[`comms.channels.${i}.range`]     ? Number(cfg[`comms.channels.${i}.range`])     : undefined,
-      })
+        bandwidth: cfg[`comms.channels.${i}.bandwidth`]
+          ? Number(cfg[`comms.channels.${i}.bandwidth`])
+          : undefined,
+        range: cfg[`comms.channels.${i}.range`]
+          ? Number(cfg[`comms.channels.${i}.range`])
+          : undefined,
+      });
     }
-    return result
-  })
+    return result;
+  });
 
   function toggle(ch: number) {
-    hiddenChannels.update(s => {
-      const next = new Set(s)
-      next.has(ch) ? next.delete(ch) : next.add(ch)
-      return next
-    })
+    hiddenChannels.update((s) => {
+      const next = new Set(s);
+      next.has(ch) ? next.delete(ch) : next.add(ch);
+      return next;
+    });
   }
 </script>
 
@@ -39,10 +47,12 @@
     <div class="title">Channels</div>
     <div class="ch-list">
       {#each channels as ch}
-        {@const hidden   = $hiddenChannels.has(ch.index)}
-        {@const color    = channelColorCSS(ch.index)}
+        {@const hidden = $hiddenChannels.has(ch.index)}
+        {@const color = channelColorCSS(ch.index)}
         {@const stats = $currentSpeakStats.get(ch.index)}
-        {@const sizeLabel = ch.bandwidth ? (ch.bandwidth / 1000).toFixed(0) + ' kbps' : '—'}
+        {@const sizeLabel = ch.bandwidth
+          ? (ch.bandwidth / 1000).toFixed(0) + " kbps"
+          : "—"}
         <div class="ch-row">
           <button
             class="ch-btn"
@@ -50,12 +60,22 @@
             style="--c:{color}"
             onclick={() => toggle(ch.index)}
           >
-            <span class="ch-icon">{ch.type === 'voice' ? '🔊' : ch.type === 'radio' ? '📡' : '●'}</span>
+            <span class="ch-icon"
+              >{ch.type === "voice"
+                ? "🔊"
+                : ch.type === "radio"
+                  ? "📡"
+                  : "●"}</span
+            >
             <span class="ch-label">ch.{ch.index}</span>
           </button>
-          <span class="ch-meta" style="color:color-mix(in srgb, {color} 55%, #607080)">{sizeLabel}</span>
+          <span
+            class="ch-meta"
+            style="color:color-mix(in srgb, {color} 55%, #607080)"
+            >{sizeLabel}</span
+          >
           <span class="ch-count" class:zero={!stats} style="color:{color}">
-            {stats ? `${stats.count} msg · ${stats.bytes} B` : '—'}
+            {stats ? `${stats.count} msg · ${stats.bytes} B` : "—"}
           </span>
         </div>
       {/each}
@@ -104,7 +124,9 @@
     border-radius: 4px;
     padding: 3px 7px;
     cursor: pointer;
-    transition: opacity 0.15s, background 0.15s;
+    transition:
+      opacity 0.15s,
+      background 0.15s;
   }
   .ch-btn:hover {
     background: color-mix(in srgb, var(--c) 20%, transparent);
@@ -131,7 +153,9 @@
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
   }
-  .ch-count.zero { opacity: 0.3; }
+  .ch-count.zero {
+    opacity: 0.3;
+  }
 
   .ch-label {
     font-size: 11px;

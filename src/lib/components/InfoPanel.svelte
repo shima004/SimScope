@@ -1,53 +1,84 @@
 <script lang="ts">
-  import { agentReceivedComms, entities, inspectedEntity, inspectedId, pinnedAgentId, selectedEntity, selectedId } from '$lib/stores/simulation'
-  import { EntityURNLabel, FIERYNESS_LABEL, EntityURN, entityColor, isAgent } from '$lib/rcrs/urns'
-  import type { BuildingEntity, RefugeEntity, HumanEntity, BlockadeEntity, FireBrigadeEntity, AreaEntity } from '$lib/rcrs/types'
-  import { channelColorCSS } from '$lib/rcrs/channelColors'
+  import { channelColorCSS } from "$lib/rcrs/channelColors";
+  import type {
+    AreaEntity,
+    BlockadeEntity,
+    BuildingEntity,
+    FireBrigadeEntity,
+    HumanEntity,
+    RefugeEntity,
+  } from "$lib/rcrs/types";
+  import {
+    EntityURN,
+    EntityURNLabel,
+    FIERYNESS_LABEL,
+    entityColor,
+    isAgent,
+  } from "$lib/rcrs/urns";
+  import {
+    agentReceivedComms,
+    entities,
+    inspectedEntity,
+    inspectedId,
+    pinnedAgentId,
+    selectedEntity,
+    selectedId,
+  } from "$lib/stores/simulation";
 
   function typeLabel(urn: number) {
-    return EntityURNLabel[urn] ?? `URN:${urn}`
+    return EntityURNLabel[urn] ?? `URN:${urn}`;
   }
 
   function findCarriedCivilian(ambulanceId: number): HumanEntity | null {
     for (const e of $entities.values()) {
       if (e.urn === EntityURN.CIVILIAN) {
-        const h = e as HumanEntity
-        if (h.position === ambulanceId) return h
+        const h = e as HumanEntity;
+        if (h.position === ambulanceId) return h;
       }
     }
-    return null
+    return null;
   }
 
   function togglePin(id: number) {
-    pinnedAgentId.update(v => v === id ? null : id)
+    pinnedAgentId.update((v) => (v === id ? null : id));
   }
 
   // ピン止め中かつ別エンティティを参照している状態
-  const showDual = $derived($pinnedAgentId !== null && $inspectedEntity !== null)
+  const showDual = $derived(
+    $pinnedAgentId !== null && $inspectedEntity !== null,
+  );
 </script>
 
 {#snippet entityProps(e: ReturnType<typeof $selectedEntity>, isPinned: boolean)}
   <div class="props">
     {#if e}
       <!-- Position -->
-      {#if 'x' in e && 'y' in e}
+      {#if "x" in e && "y" in e}
         <div class="row">
           <span class="key">Position</span>
-          <span class="val">{(e as AreaEntity).x.toLocaleString()}, {(e as AreaEntity).y.toLocaleString()}</span>
+          <span class="val"
+            >{(e as AreaEntity).x.toLocaleString()}, {(
+              e as AreaEntity
+            ).y.toLocaleString()}</span
+          >
         </div>
       {/if}
 
       <!-- Building-specific -->
-      {#if 'fieryness' in e}
+      {#if "fieryness" in e}
         {@const b = e as BuildingEntity}
         <div class="row">
           <span class="key">Fieryness</span>
-          <span class="val fiery-{b.fieryness}">{FIERYNESS_LABEL[b.fieryness] ?? b.fieryness}</span>
+          <span class="val fiery-{b.fieryness}"
+            >{FIERYNESS_LABEL[b.fieryness] ?? b.fieryness}</span
+          >
         </div>
         <div class="row">
           <span class="key">Brokenness</span>
           <span class="val">
-            <span class="bar-wrap"><span class="bar" style="width:{b.brokenness}%"></span></span>
+            <span class="bar-wrap"
+              ><span class="bar" style="width:{b.brokenness}%"></span></span
+            >
             {b.brokenness}%
           </span>
         </div>
@@ -62,12 +93,15 @@
       {/if}
 
       <!-- Agent-specific -->
-      {#if 'hp' in e}
+      {#if "hp" in e}
         {@const h = e as HumanEntity}
         <div class="row">
           <span class="key">HP</span>
           <span class="val">
-            <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, h.hp / 100)}%"></span></span>
+            <span class="bar-wrap"
+              ><span class="bar hp" style="width:{Math.min(100, h.hp / 100)}%"
+              ></span></span
+            >
             {h.hp.toLocaleString()}
           </span>
         </div>
@@ -90,13 +124,18 @@
       {/if}
 
       <!-- Refuge capacity -->
-      {#if 'bedCapacity' in e}
+      {#if "bedCapacity" in e}
         {@const r = e as RefugeEntity}
-        {@const pct = r.bedCapacity > 0 ? Math.min(100, r.occupiedBeds / r.bedCapacity * 100) : 0}
+        {@const pct =
+          r.bedCapacity > 0
+            ? Math.min(100, (r.occupiedBeds / r.bedCapacity) * 100)
+            : 0}
         <div class="row">
           <span class="key">Beds</span>
           <span class="val">
-            <span class="bar-wrap"><span class="bar refuge" style="width:{pct}%"></span></span>
+            <span class="bar-wrap"
+              ><span class="bar refuge" style="width:{pct}%"></span></span
+            >
             {r.occupiedBeds} / {r.bedCapacity}
           </span>
         </div>
@@ -114,7 +153,12 @@
           <div class="row">
             <span class="key">HP</span>
             <span class="val">
-              <span class="bar-wrap"><span class="bar hp" style="width:{Math.min(100, carried.hp / 100)}%"></span></span>
+              <span class="bar-wrap"
+                ><span
+                  class="bar hp"
+                  style="width:{Math.min(100, carried.hp / 100)}%"
+                ></span></span
+              >
               {carried.hp.toLocaleString()}
             </span>
           </div>
@@ -135,10 +179,12 @@
       {/if}
 
       <!-- Fire Brigade water -->
-      {#if 'waterQuantity' in e}
+      {#if "waterQuantity" in e}
         <div class="row">
           <span class="key">Water</span>
-          <span class="val">{(e as FireBrigadeEntity).waterQuantity.toLocaleString()} L</span>
+          <span class="val"
+            >{(e as FireBrigadeEntity).waterQuantity.toLocaleString()} L</span
+          >
         </div>
       {/if}
 
@@ -157,16 +203,28 @@
 
       <!-- Received communications — ピン止めパネル非表示、選択パネルのみ -->
       {#if !isPinned && isAgent(e.urn) && $agentReceivedComms}
-        {@const sortedComms = [...$agentReceivedComms].sort((a, b) => a.channel - b.channel)}
-        <div class="section-label">Communications ({$agentReceivedComms.length})</div>
+        {@const sortedComms = [...$agentReceivedComms].sort(
+          (a, b) => a.channel - b.channel,
+        )}
+        <div class="section-label">
+          Communications ({$agentReceivedComms.length})
+        </div>
         <div class="comm-list">
           {#each sortedComms as msg}
             {@const sender = $entities.get(msg.senderId)}
             {@const chColor = channelColorCSS(msg.channel)}
             <div class="comm-entry" style="--ch-color:{chColor}">
               <div class="comm-header">
-                <span class="comm-type">{EntityURNLabel[sender?.urn ?? 0] ?? 'Unknown'}</span>
-                <button class="comm-id" onclick={() => $pinnedAgentId !== null ? inspectedId.set(msg.senderId) : selectedId.set(msg.senderId)}>
+                <span class="comm-type"
+                  >{EntityURNLabel[sender?.urn ?? 0] ?? "Unknown"}</span
+                >
+                <button
+                  class="comm-id"
+                  onclick={() =>
+                    $pinnedAgentId !== null
+                      ? inspectedId.set(msg.senderId)
+                      : selectedId.set(msg.senderId)}
+                >
                   #{msg.senderId}
                 </button>
                 <span class="comm-ch">ch.{msg.channel}</span>
@@ -186,22 +244,34 @@
 
 {#if $selectedEntity || $pinnedAgentId}
   <div class="panel-group">
-
     <!-- 追加パネル（左側）— ピン止め中に別エンティティを参照中のみ -->
     {#if showDual && $inspectedEntity}
       {@const e = $inspectedEntity}
       <aside class="panel">
         <header>
           <span class="type-badge">{typeLabel(e.urn)}</span>
-          <span class="entity-id" style="color:{entityColor(e.urn, 'hp' in e ? (e as HumanEntity).hp : 10000)}">#{e.id}</span>
+          <span
+            class="entity-id"
+            style="color:{entityColor(
+              e.urn,
+              'hp' in e ? (e as HumanEntity).hp : 10000,
+            )}">#{e.id}</span
+          >
           {#if isAgent(e.urn)}
             <button
               class="pin-btn"
-              onclick={() => { pinnedAgentId.set(null); selectedId.set(e.id) }}
-              title="こちらをピン止めに切り替え"
-            >📌</button>
+              onclick={() => {
+                pinnedAgentId.set(null);
+                selectedId.set(e.id);
+              }}
+              title="こちらをピン止めに切り替え">📌</button
+            >
           {/if}
-          <button class="close-btn" onclick={() => inspectedId.set(null)} aria-label="Close">✕</button>
+          <button
+            class="close-btn"
+            onclick={() => inspectedId.set(null)}
+            aria-label="Close">✕</button
+          >
         </header>
         {@render entityProps(e, false)}
       </aside>
@@ -212,22 +282,37 @@
       {@const e = $selectedEntity}
       <aside class="panel" class:panel-pinned={$pinnedAgentId !== null}>
         <header>
-          <span class="type-badge" class:pinned-label={$pinnedAgentId !== null}>{typeLabel(e.urn)}</span>
-          <span class="entity-id" style="color:{entityColor(e.urn, 'hp' in e ? (e as HumanEntity).hp : 10000)}">#{e.id}</span>
+          <span class="type-badge" class:pinned-label={$pinnedAgentId !== null}
+            >{typeLabel(e.urn)}</span
+          >
+          <span
+            class="entity-id"
+            style="color:{entityColor(
+              e.urn,
+              'hp' in e ? (e as HumanEntity).hp : 10000,
+            )}">#{e.id}</span
+          >
           {#if isAgent(e.urn)}
             <button
               class="pin-btn"
               class:active={$pinnedAgentId === e.id}
               onclick={() => togglePin(e.id)}
-              title={$pinnedAgentId === e.id ? 'ピン止め解除' : 'ピン止め'}
-            >📌</button>
+              title={$pinnedAgentId === e.id ? "ピン止め解除" : "ピン止め"}
+              >📌</button
+            >
           {/if}
-          <button class="close-btn" onclick={() => { pinnedAgentId.set(null); selectedId.set(null) }} aria-label="Close">✕</button>
+          <button
+            class="close-btn"
+            onclick={() => {
+              pinnedAgentId.set(null);
+              selectedId.set(null);
+            }}
+            aria-label="Close">✕</button
+          >
         </header>
         {@render entityProps(e, false)}
       </aside>
     {/if}
-
   </div>
 {/if}
 
@@ -259,7 +344,9 @@
     box-shadow: 0 0 20px rgba(255, 200, 60, 0.06);
   }
 
-  .pinned-label { color: #ffc840; }
+  .pinned-label {
+    color: #ffc840;
+  }
 
   header {
     display: flex;
@@ -296,10 +383,18 @@
     line-height: 1;
     opacity: 0.35;
     filter: grayscale(1);
-    transition: opacity 0.15s, filter 0.15s;
+    transition:
+      opacity 0.15s,
+      filter 0.15s;
   }
-  .pin-btn:hover  { opacity: 0.7; filter: grayscale(0.3); }
-  .pin-btn.active { opacity: 1;   filter: grayscale(0); }
+  .pin-btn:hover {
+    opacity: 0.7;
+    filter: grayscale(0.3);
+  }
+  .pin-btn.active {
+    opacity: 1;
+    filter: grayscale(0);
+  }
 
   .pin-indicator {
     font-size: 13px;
@@ -315,7 +410,9 @@
     padding: 0;
     line-height: 1;
   }
-  .close-btn:hover { color: #c8d8e8; }
+  .close-btn:hover {
+    color: #c8d8e8;
+  }
 
   .props {
     padding: 8px 12px 12px;
@@ -331,7 +428,10 @@
     gap: 8px;
   }
 
-  .key { color: #607080; flex-shrink: 0; }
+  .key {
+    color: #607080;
+    flex-shrink: 0;
+  }
 
   .val {
     display: flex;
@@ -345,7 +445,7 @@
     display: inline-block;
     width: 60px;
     height: 4px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 2px;
     overflow: hidden;
   }
@@ -355,8 +455,12 @@
     background: #c84040;
     border-radius: 2px;
   }
-  .bar.hp     { background: #40c870; }
-  .bar.refuge { background: #40c898; }
+  .bar.hp {
+    background: #40c870;
+  }
+  .bar.refuge {
+    background: #40c898;
+  }
 
   .section-label {
     font-size: 10px;
@@ -380,7 +484,9 @@
     cursor: pointer;
     align-self: flex-start;
   }
-  .select-btn:hover { background: rgba(255, 200, 60, 0.1); }
+  .select-btn:hover {
+    background: rgba(255, 200, 60, 0.1);
+  }
 
   .comm-list {
     display: flex;
@@ -426,7 +532,10 @@
     flex: 1;
     text-align: left;
   }
-  .comm-id:hover { color: #00c8ff; text-decoration: underline; }
+  .comm-id:hover {
+    color: #00c8ff;
+    text-decoration: underline;
+  }
 
   .comm-ch {
     font-size: 10px;
@@ -441,10 +550,25 @@
     padding-left: 2px;
   }
 
-  .fiery-0 { color: #80c0a0; }
-  .fiery-1 { color: #ffc040; }
-  .fiery-2 { color: #ff8020; }
-  .fiery-3 { color: #ff4000; }
-  .fiery-4, .fiery-5, .fiery-6, .fiery-7 { color: #c08060; }
-  .fiery-8 { color: #606060; }
+  .fiery-0 {
+    color: #80c0a0;
+  }
+  .fiery-1 {
+    color: #ffc040;
+  }
+  .fiery-2 {
+    color: #ff8020;
+  }
+  .fiery-3 {
+    color: #ff4000;
+  }
+  .fiery-4,
+  .fiery-5,
+  .fiery-6,
+  .fiery-7 {
+    color: #c08060;
+  }
+  .fiery-8 {
+    color: #606060;
+  }
 </style>

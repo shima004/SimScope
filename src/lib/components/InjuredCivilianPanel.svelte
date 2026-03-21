@@ -1,45 +1,59 @@
 <script lang="ts">
-  import type { HumanEntity } from '$lib/rcrs/types';
-  import { EntityURN, entityColor } from '$lib/rcrs/urns';
-  import { entities, focusPoint, perceivedEntities, perceptionViewMode, selectedId } from '$lib/stores/simulation';
+  import type { HumanEntity } from "$lib/rcrs/types";
+  import { EntityURN, entityColor } from "$lib/rcrs/urns";
+  import {
+    entities,
+    focusPoint,
+    perceivedEntities,
+    perceptionViewMode,
+    selectedId,
+  } from "$lib/stores/simulation";
 
-  type MergedRow = { id: number; p: HumanEntity | null; a: HumanEntity | null }
+  type MergedRow = { id: number; p: HumanEntity | null; a: HumanEntity | null };
 
-  function calcInjured(map: Map<number, import('$lib/rcrs/types').SimEntity>) {
-    const result: HumanEntity[] = []
+  function calcInjured(map: Map<number, import("$lib/rcrs/types").SimEntity>) {
+    const result: HumanEntity[] = [];
     for (const e of map.values()) {
-      if (e.urn !== EntityURN.CIVILIAN) continue
-      const h = e as HumanEntity
-      if (h.buriedness > 0 || h.damage === 0) continue
-      const pos = map.get(h.position)
-      if (pos?.urn === EntityURN.REFUGE || pos?.urn === EntityURN.AMBULANCE_TEAM) continue
-      result.push(h)
+      if (e.urn !== EntityURN.CIVILIAN) continue;
+      const h = e as HumanEntity;
+      if (h.buriedness > 0 || h.damage === 0) continue;
+      const pos = map.get(h.position);
+      if (
+        pos?.urn === EntityURN.REFUGE ||
+        pos?.urn === EntityURN.AMBULANCE_TEAM
+      )
+        continue;
+      result.push(h);
     }
-    return result.sort((a, b) => a.hp - b.hp)
+    return result.sort((a, b) => a.hp - b.hp);
   }
 
   function merge(perceived: HumanEntity[], actual: HumanEntity[]): MergedRow[] {
-    const map = new Map<number, MergedRow>()
-    for (const h of perceived) map.set(h.id, { id: h.id, p: h, a: null })
+    const map = new Map<number, MergedRow>();
+    for (const h of perceived) map.set(h.id, { id: h.id, p: h, a: null });
     for (const h of actual) {
-      const e = map.get(h.id)
-      if (e) e.a = h
-      else map.set(h.id, { id: h.id, p: null, a: h })
+      const e = map.get(h.id);
+      if (e) e.a = h;
+      else map.set(h.id, { id: h.id, p: null, a: h });
     }
     return [...map.values()].sort((x, y) => {
-      const pd = (x.p ? 0 : 1) - (y.p ? 0 : 1)
-      return pd !== 0 ? pd : (x.p ?? x.a)!.hp - (y.p ?? y.a)!.hp
-    })
+      const pd = (x.p ? 0 : 1) - (y.p ? 0 : 1);
+      return pd !== 0 ? pd : (x.p ?? x.a)!.hp - (y.p ?? y.a)!.hp;
+    });
   }
 
-  const injured          = $derived(calcInjured($entities))
-  const injuredPerceived = $derived($perceptionViewMode ? calcInjured($perceivedEntities) : [])
-  const merged           = $derived($perceptionViewMode ? merge(injuredPerceived, injured) : null)
+  const injured = $derived(calcInjured($entities));
+  const injuredPerceived = $derived(
+    $perceptionViewMode ? calcInjured($perceivedEntities) : [],
+  );
+  const merged = $derived(
+    $perceptionViewMode ? merge(injuredPerceived, injured) : null,
+  );
 
   function focusOn(row: MergedRow) {
-    const h = row.p ?? row.a!
-    selectedId.set(h.id)
-    focusPoint.set({ x: h.x, y: h.y })
+    const h = row.p ?? row.a!;
+    selectedId.set(h.id);
+    focusPoint.set({ x: h.x, y: h.y });
   }
 </script>
 
@@ -57,30 +71,60 @@
       {#if merged}
         {#each merged as row (row.id)}
           {@const rep = row.p ?? row.a!}
-          <button class="row dual-row" onclick={() => focusOn(row)} class:selected={$selectedId === row.id}>
-            <span class="cid" style="color:{entityColor(rep.urn)}">#{row.id}</span>
+          <button
+            class="row dual-row"
+            onclick={() => focusOn(row)}
+            class:selected={$selectedId === row.id}
+          >
+            <span class="cid" style="color:{entityColor(rep.urn)}"
+              >#{row.id}</span
+            >
             <span class="dual-cell">
               {#if row.p}
-                <span class="bar-wrap"><span class="bar" style="width:{Math.min(100, row.p.hp / 100)}%"></span></span>
+                <span class="bar-wrap"
+                  ><span
+                    class="bar"
+                    style="width:{Math.min(100, row.p.hp / 100)}%"
+                  ></span></span
+                >
                 <span class="num">{row.p.hp.toLocaleString()}</span>
-                {#if row.p.damage > 0}<span class="badge dmg">D:{row.p.damage}</span>{/if}
+                {#if row.p.damage > 0}<span class="badge dmg"
+                    >D:{row.p.damage}</span
+                  >{/if}
               {/if}
             </span>
             <span class="dual-cell">
               {#if row.a}
-                <span class="bar-wrap"><span class="bar" style="width:{Math.min(100, row.a.hp / 100)}%"></span></span>
+                <span class="bar-wrap"
+                  ><span
+                    class="bar"
+                    style="width:{Math.min(100, row.a.hp / 100)}%"
+                  ></span></span
+                >
                 <span class="num">{row.a.hp.toLocaleString()}</span>
-                {#if row.a.damage > 0}<span class="badge dmg">D:{row.a.damage}</span>{/if}
+                {#if row.a.damage > 0}<span class="badge dmg"
+                    >D:{row.a.damage}</span
+                  >{/if}
               {/if}
             </span>
           </button>
         {/each}
       {:else}
         {#each injured as h (h.id)}
-          <button class="row" onclick={() => { selectedId.set(h.id); focusPoint.set({ x: h.x, y: h.y }) }} class:selected={$selectedId === h.id}>
+          <button
+            class="row"
+            onclick={() => {
+              selectedId.set(h.id);
+              focusPoint.set({ x: h.x, y: h.y });
+            }}
+            class:selected={$selectedId === h.id}
+          >
             <span class="cid" style="color:{entityColor(h.urn)}">#{h.id}</span>
             <span class="stat">
-              <span class="bar-wrap"><span class="bar" style="width:{Math.min(100, h.hp / 100)}%"></span></span>
+              <span class="bar-wrap"
+                ><span class="bar" style="width:{Math.min(100, h.hp / 100)}%"
+                ></span></span
+              >
               <span class="num">{h.hp.toLocaleString()}</span>
             </span>
             <span class="badge dmg">D:{h.damage}</span>
@@ -110,7 +154,9 @@
     flex-direction: column;
   }
 
-  .panel.dual { width: 360px; }
+  .panel.dual {
+    width: 360px;
+  }
 
   .header {
     display: flex;
@@ -139,8 +185,12 @@
     text-align: center;
     flex-shrink: 0;
   }
-  .col-label.perceived { color: #ffc840; }
-  .col-label.actual    { color: #607080; }
+  .col-label.perceived {
+    color: #ffc840;
+  }
+  .col-label.actual {
+    color: #607080;
+  }
 
   .list {
     overflow-y: auto;
@@ -163,8 +213,12 @@
     width: 100%;
     text-align: left;
   }
-  .row:hover    { background: rgba(255,255,255,0.05); }
-  .row.selected { background: rgba(0, 200, 255, 0.1); }
+  .row:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .row.selected {
+    background: rgba(0, 200, 255, 0.1);
+  }
 
   .dual-row {
     display: grid;
@@ -200,7 +254,7 @@
     display: inline-block;
     width: 40px;
     height: 4px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 2px;
     overflow: hidden;
     flex-shrink: 0;

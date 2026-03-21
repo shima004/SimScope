@@ -1,11 +1,11 @@
 <script lang="ts">
-  import SimMap from '$lib/components/SimMap.svelte'
-  import InfoPanel from '$lib/components/InfoPanel.svelte'
-  import ControlPanel from '$lib/components/ControlPanel.svelte'
-  import CivilianStatusPanel from '$lib/components/CivilianStatusPanel.svelte'
-  import InjuredCivilianPanel from '$lib/components/InjuredCivilianPanel.svelte'
-  import ScorePanel from '$lib/components/ScorePanel.svelte'
-  import ChannelFilterPanel from '$lib/components/ChannelFilterPanel.svelte'
+  import ChannelFilterPanel from "$lib/components/ChannelFilterPanel.svelte";
+  import CivilianStatusPanel from "$lib/components/CivilianStatusPanel.svelte";
+  import ControlPanel from "$lib/components/ControlPanel.svelte";
+  import InfoPanel from "$lib/components/InfoPanel.svelte";
+  import InjuredCivilianPanel from "$lib/components/InjuredCivilianPanel.svelte";
+  import ScorePanel from "$lib/components/ScorePanel.svelte";
+  import SimMap from "$lib/components/SimMap.svelte";
 </script>
 
 <div class="app">

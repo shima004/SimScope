@@ -517,7 +517,10 @@ function handleLogFrame(frame: LogProtoMsg) {
       const raw = cmd.components[ComponentCommandURN.Message]?.rawData;
       if (channel === undefined || !raw) continue;
       const cur = speakMap.get(channel) ?? { count: 0, bytes: 0 };
-      speakMap.set(channel, { count: cur.count + 1, bytes: cur.bytes + raw.length });
+      speakMap.set(channel, {
+        count: cur.count + 1,
+        bytes: cur.bytes + raw.length,
+      });
     }
     if (speakMap.size > 0) speakTimeline.set(time, speakMap);
   }

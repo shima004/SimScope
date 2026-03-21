@@ -1,53 +1,58 @@
 <script lang="ts">
-  import { EntityURN } from '$lib/rcrs/urns'
-  import { entities, initialBlockadeCost, currentStep } from '$lib/stores/simulation'
+  import { EntityURN } from "$lib/rcrs/urns";
+  import {
+    currentStep,
+    entities,
+    initialBlockadeCost,
+  } from "$lib/stores/simulation";
 
-  const MAX_HP = 10000
+  const MAX_HP = 10000;
 
   const blockadeResult = $derived.by(() => {
-    if ($initialBlockadeCost === 0) return null
-    if ($currentStep === 0) return { pct: 0, total: $initialBlockadeCost }
-    let current = 0
+    if ($initialBlockadeCost === 0) return null;
+    if ($currentStep === 0) return { pct: 0, total: $initialBlockadeCost };
+    let current = 0;
     for (const e of $entities.values()) {
-      if ('repairCost' in e) current += (e as { repairCost: number }).repairCost
+      if ("repairCost" in e)
+        current += (e as { repairCost: number }).repairCost;
     }
-    const pct = ($initialBlockadeCost - current) / $initialBlockadeCost * 100
-    return { pct, total: $initialBlockadeCost }
-  })
+    const pct = (($initialBlockadeCost - current) / $initialBlockadeCost) * 100;
+    return { pct, total: $initialBlockadeCost };
+  });
 
   const refugeResult = $derived.by(() => {
-    let injured = 0
-    let inRefuge = 0
+    let injured = 0;
+    let inRefuge = 0;
     for (const e of $entities.values()) {
-      if (e.urn !== EntityURN.CIVILIAN) continue
-      const c = e as { hp: number; position: number }
-      if (!('hp' in e) || c.hp >= MAX_HP) continue
-      injured++
-      const pos = $entities.get(c.position)
-      if (pos?.urn === EntityURN.REFUGE) inRefuge++
+      if (e.urn !== EntityURN.CIVILIAN) continue;
+      const c = e as { hp: number; position: number };
+      if (!("hp" in e) || c.hp >= MAX_HP) continue;
+      injured++;
+      const pos = $entities.get(c.position);
+      if (pos?.urn === EntityURN.REFUGE) inRefuge++;
     }
-    return { inRefuge, injured }
-  })
+    return { inRefuge, injured };
+  });
 
   const result = $derived.by(() => {
-    let civilians = 0
-    let total = 0
-    let hp = 0
-    let max = 0
+    let civilians = 0;
+    let total = 0;
+    let hp = 0;
+    let max = 0;
     for (const e of $entities.values()) {
-      if (e.urn !== EntityURN.CIVILIAN) continue
-      const c = e as { hp: number }
-      total++
-      if ('hp' in e) {
-        hp += c.hp
-        if (c.hp > 0) civilians++
+      if (e.urn !== EntityURN.CIVILIAN) continue;
+      const c = e as { hp: number };
+      total++;
+      if ("hp" in e) {
+        hp += c.hp;
+        if (c.hp > 0) civilians++;
       }
-      max += MAX_HP
+      max += MAX_HP;
     }
-    if (max === 0) return null
-    const score = civilians * Math.exp(-5 * (1 - hp / max))
-    return { score, maxScore: total }
-  })
+    if (max === 0) return null;
+    const score = civilians * Math.exp(-5 * (1 - hp / max));
+    return { score, maxScore: total };
+  });
 </script>
 
 {#if result !== null || blockadeResult !== null}
@@ -55,19 +60,29 @@
     {#if result !== null}
       <div class="row">
         <span class="label">Score</span>
-        <span class="value">{result.score.toFixed(2)}<span class="max"> / {result.maxScore}</span></span>
+        <span class="value"
+          >{result.score.toFixed(2)}<span class="max">
+            / {result.maxScore}</span
+          ></span
+        >
       </div>
     {/if}
     {#if refugeResult !== null && result !== null}
       <div class="row">
         <span class="label">Injured in Refuge</span>
-        <span class="value">{refugeResult.inRefuge}<span class="max"> / {refugeResult.injured}</span></span>
+        <span class="value"
+          >{refugeResult.inRefuge}<span class="max">
+            / {refugeResult.injured}</span
+          ></span
+        >
       </div>
     {/if}
     {#if blockadeResult !== null}
       <div class="row">
         <span class="label">Blockade Cleared</span>
-        <span class="value">{blockadeResult.pct.toFixed(1)}<span class="max">%</span></span>
+        <span class="value"
+          >{blockadeResult.pct.toFixed(1)}<span class="max">%</span></span
+        >
       </div>
     {/if}
   </div>
@@ -114,5 +129,4 @@
     color: #607080;
     font-weight: 400;
   }
-
 </style>
