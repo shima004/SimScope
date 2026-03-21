@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import {
-    agentVisibleIds,
     connected,
     connectWS,
     currentStep,
@@ -15,8 +13,9 @@
     maxStep,
     mode,
     perceptionViewMode,
-    seekToStep,
+    seekToStep
   } from '$lib/stores/simulation';
+  import { onMount } from 'svelte';
 
   // /proxy?host=<tcp-host>&port=<tcp-port> → Vite の tcpWsProxyPlugin が中継
   const _q = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
@@ -217,7 +216,7 @@
     <button class="btn primary" onclick={() => showConfig = true}>Kernel Config</button>
   {/if}
 
-  {#if $mode !== 'idle'}
+  {#if $mode !== 'idle' && $maxStep > 0}
     <button
       class="btn follow"
       class:active={$followMode}

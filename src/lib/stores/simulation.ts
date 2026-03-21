@@ -150,18 +150,14 @@ function updatePerceptionState(step: number, selId: number | null) {
     agentReceivedComms.set(null);
     return;
   }
-  const stepMap = perceptionTimeline.get(step);
-  if (!stepMap) {
-    agentVisibleIds.set(null);
-    agentReceivedComms.set(null);
-    return;
-  }
-  const ids = stepMap.get(selId);
+
+  const ids = perceptionTimeline.get(step)?.get(selId);
   agentVisibleIds.set(ids ? new Set(ids) : null);
 
   const comms = commTimeline.get(step)?.get(selId) ?? null;
   agentReceivedComms.set(comms?.length ? comms : null);
 
+  // データの有無に関わらず再構築（early return すると古い状態が残る）
   if (get(perceptionViewMode)) rebuildPerceivedWorld(step, selId);
 }
 
@@ -198,9 +194,12 @@ export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
   }
 
   // 3. 一度も知覚していないエージェント・瓦礫を除去
-  for (const [id, e] of snapshot) {
-    if ((isAgent(e.urn) || e.urn === EntityURN.BLOCKADE) && !seenIds.has(id)) {
-      snapshot.delete(id);
+  // （知覚データが一件もない場合は除去しない＝初期世界をそのまま表示）
+  if (seenIds.size > 0) {
+    for (const [id, e] of snapshot) {
+      if ((isAgent(e.urn) || e.urn === EntityURN.BLOCKADE) && !seenIds.has(id)) {
+        snapshot.delete(id);
+      }
     }
   }
 
