@@ -261,8 +261,7 @@
             <button
               class="pin-btn"
               onclick={() => {
-                pinnedAgentId.set(null);
-                selectedId.set(e.id);
+                pinnedAgentId.set(e.id);
               }}
               title="こちらをピン止めに切り替え">📌</button
             >

@@ -525,10 +525,11 @@
 
   const unsubPerceivedEntities = perceivedEntities.subscribe((emap) => {
     if (!deck || !$perceptionViewMode) return;
+    const selId = $selectedId;
     deck.setProps({
       layers: buildLayers(
         emap,
-        $selectedId,
+        selId,
         $agentActions,
         $kernelConfig,
         $agentVisibleIds,
@@ -536,6 +537,7 @@
         $hiddenChannels,
       ),
     });
+    followAgent(emap, selId);
   });
 
   const unsubPerceptionViewMode = perceptionViewMode.subscribe((enabled) => {

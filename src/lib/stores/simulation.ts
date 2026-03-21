@@ -161,8 +161,12 @@ export const inspectedEntity = derived(
 
 // ピン止め変化時: ON → selectedId をピン固定、OFF → inspectedId をクリア
 pinnedAgentId.subscribe((id) => {
-  if (id !== null) selectedId.set(id);
-  else inspectedId.set(null);
+  if (id !== null) {
+    selectedId.set(id);
+    inspectedId.set(null);
+  } else {
+    inspectedId.set(null);
+  }
 });
 
 function updatePerceptionState(step: number, selId: number | null) {
