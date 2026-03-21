@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { HumanEntity } from "$lib/rcrs/types";
+  import type { HumanEntity, SimEntity } from "$lib/rcrs/types";
   import { CommandURN, EntityURN, entityColor, isAgent } from "$lib/rcrs/urns";
   import {
     agentActions,
@@ -18,7 +18,7 @@
   };
   type MergedCarry = { id: number; p: CarryPair | null; a: CarryPair | null };
 
-  function calcRescued(map: Map<number, import("$lib/rcrs/types").SimEntity>) {
+  function calcRescued(map: Map<number, SimEntity>) {
     const seen = new Map<number, HumanEntity>();
     for (const action of $agentActions.values()) {
       if (action.urn === CommandURN.AK_RESCUE && action.target !== undefined) {
@@ -30,7 +30,7 @@
   }
 
   function calcCarried(
-    map: Map<number, import("$lib/rcrs/types").SimEntity>,
+    map: Map<number, SimEntity>,
   ): CarryPair[] {
     const result: CarryPair[] = [];
     for (const e of map.values()) {
@@ -45,7 +45,7 @@
   }
 
   function calcBuried(
-    map: Map<number, import("$lib/rcrs/types").SimEntity>,
+    map: Map<number, SimEntity>,
     rescuedIds: Set<number>,
   ) {
     const result: HumanEntity[] = [];

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { HumanEntity } from "$lib/rcrs/types";
+  import type { HumanEntity, SimEntity } from "$lib/rcrs/types";
   import { EntityURN, entityColor } from "$lib/rcrs/urns";
   import {
     entities,
@@ -11,7 +11,7 @@
 
   type MergedRow = { id: number; p: HumanEntity | null; a: HumanEntity | null };
 
-  function calcInjured(map: Map<number, import("$lib/rcrs/types").SimEntity>) {
+  function calcInjured(map: Map<number, SimEntity>) {
     const result: HumanEntity[] = [];
     for (const e of map.values()) {
       if (e.urn !== EntityURN.CIVILIAN) continue;

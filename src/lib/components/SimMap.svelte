@@ -33,7 +33,7 @@
     ScatterplotLayer,
   } from "@deck.gl/layers";
   import { onDestroy, onMount } from "svelte";
-  import { get } from "svelte/store";
+  import { derived, get } from "svelte/store";
 
   function selectEntity(id: number | null) {
     if (get(pinnedAgentId) !== null) inspectedId.set(id);
@@ -487,152 +487,32 @@
 
   let prevSize = 0;
 
-  function activeMap() {
-    return $perceptionViewMode ? $perceivedEntities : $entities;
-  }
-  function rebuild() {
-    if (!deck) return;
-    const emap = activeMap();
-    deck.setProps({
-      layers: buildLayers(
-        emap,
-        $selectedId,
-        $agentActions,
-        $kernelConfig,
-        $agentVisibleIds,
-        $agentReceivedComms,
-        $hiddenChannels,
-      ),
-    });
-  }
+  // レイヤー構築に必要な全ストアを1つの derived にまとめる
+  // 同一ティックの複数ストア更新をバッチ化し buildLayers の重複呼び出しを防ぐ
+  const layerArgs = derived(
+    [entities, perceivedEntities, perceptionViewMode, selectedId, agentActions, kernelConfig, agentVisibleIds, agentReceivedComms, hiddenChannels],
+    ([$e, $pe, $pvm, $sel, $aa, $kc, $avi, $arc, $hc]) => ({
+      emap:  $pvm ? $pe : $e,
+      selId: $sel,
+      actions: $aa,
+      cfg:  $kc,
+      perceivedIds: $avi,
+      comms: $arc,
+      hiddenChs: $hc,
+    }),
+  );
 
-  const unsubEntities = entities.subscribe((emap) => {
+  const unsubLayers = layerArgs.subscribe(({ emap, selId, actions, cfg, perceivedIds, comms, hiddenChs }) => {
     if (!deck) return;
-    if ($perceptionViewMode) return; // perceivedEntities が主役
-    const selId = $selectedId;
-    deck.setProps({
-      layers: buildLayers(
-        emap,
-        selId,
-        $agentActions,
-        $kernelConfig,
-        $agentVisibleIds,
-        $agentReceivedComms,
-        $hiddenChannels,
-      ),
-    });
+    deck.setProps({ layers: buildLayers(emap, selId, actions, cfg, perceivedIds, comms, hiddenChs) });
+    followAgent(emap, selId);
+  });
+
+  // 実世界エンティティが初めてロードされたときにビューポートをフィット
+  const unsubFit = entities.subscribe((emap) => {
+    if (!deck || $perceptionViewMode) return;
     if (prevSize === 0 && emap.size > 0) fitViewport(emap);
     prevSize = emap.size;
-    followAgent(emap, selId);
-  });
-
-  const unsubPerceivedEntities = perceivedEntities.subscribe((emap) => {
-    if (!deck || !$perceptionViewMode) return;
-    const selId = $selectedId;
-    deck.setProps({
-      layers: buildLayers(
-        emap,
-        selId,
-        $agentActions,
-        $kernelConfig,
-        $agentVisibleIds,
-        $agentReceivedComms,
-        $hiddenChannels,
-      ),
-    });
-    followAgent(emap, selId);
-  });
-
-  const unsubPerceptionViewMode = perceptionViewMode.subscribe((enabled) => {
-    if (!deck) return;
-    const emap = enabled ? $perceivedEntities : $entities;
-    deck.setProps({
-      layers: buildLayers(
-        emap,
-        $selectedId,
-        $agentActions,
-        $kernelConfig,
-        $agentVisibleIds,
-        $agentReceivedComms,
-        $hiddenChannels,
-      ),
-    });
-  });
-
-  const unsubSel = selectedId.subscribe((selId) => {
-    if (!deck) return;
-    deck.setProps({
-      layers: buildLayers(
-        activeMap(),
-        selId,
-        $agentActions,
-        $kernelConfig,
-        $agentVisibleIds,
-        $agentReceivedComms,
-        $hiddenChannels,
-      ),
-    });
-    followAgent(activeMap(), selId);
-  });
-
-  const unsubActions = agentActions.subscribe((actions) => {
-    if (!deck) return;
-    deck.setProps({
-      layers: buildLayers(
-        activeMap(),
-        $selectedId,
-        actions,
-        $kernelConfig,
-        $agentVisibleIds,
-        $agentReceivedComms,
-        $hiddenChannels,
-      ),
-    });
-  });
-
-  const unsubPerception = agentVisibleIds.subscribe((perceivedIds) => {
-    if (!deck) return;
-    deck.setProps({
-      layers: buildLayers(
-        activeMap(),
-        $selectedId,
-        $agentActions,
-        $kernelConfig,
-        perceivedIds,
-        $agentReceivedComms,
-        $hiddenChannels,
-      ),
-    });
-  });
-
-  const unsubComms = agentReceivedComms.subscribe((comms) => {
-    if (!deck) return;
-    deck.setProps({
-      layers: buildLayers(
-        activeMap(),
-        $selectedId,
-        $agentActions,
-        $kernelConfig,
-        $agentVisibleIds,
-        comms,
-        $hiddenChannels,
-      ),
-    });
-  });
-
-  const unsubHidden = hiddenChannels.subscribe((hiddenChs) => {
-    if (!deck) return;
-    deck.setProps({
-      layers: buildLayers(
-        activeMap(),
-        $selectedId,
-        $agentActions,
-        $kernelConfig,
-        $agentVisibleIds,
-        $agentReceivedComms,
-        hiddenChs,
-      ),
-    });
   });
 
   const unsubFocus = focusPoint.subscribe((pt) => {
@@ -671,15 +551,9 @@
   });
 
   onDestroy(() => {
-    unsubEntities();
-    unsubPerceivedEntities();
-    unsubPerceptionViewMode();
-    unsubSel();
-    unsubActions();
+    unsubLayers();
+    unsubFit();
     unsubFocus();
-    unsubPerception();
-    unsubComms();
-    unsubHidden();
     deck?.finalize();
   });
 </script>

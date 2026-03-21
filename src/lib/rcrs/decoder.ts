@@ -222,7 +222,6 @@ export function applyChanges(
       updated.occupiedBeds = intProp(m, PropertyURN.OCCUPIED_BEDS);
     if (m.has(PropertyURN.WAITING_LIST_SIZE))
       updated.waitingListSize = intProp(m, PropertyURN.WAITING_LIST_SIZE);
-
     entities.set(change.entityID, updated as unknown as SimEntity);
   }
 
