@@ -34,6 +34,17 @@
     return { inRefuge, injured };
   });
 
+  const agentCounts = $derived.by(() => {
+    let fb = 0, at = 0, pf = 0, cv = 0;
+    for (const e of $entities.values()) {
+      if (e.urn === EntityURN.FIRE_BRIGADE)    fb++;
+      else if (e.urn === EntityURN.AMBULANCE_TEAM) at++;
+      else if (e.urn === EntityURN.POLICE_FORCE)   pf++;
+      else if (e.urn === EntityURN.CIVILIAN)        cv++;
+    }
+    return { fb, at, pf, cv };
+  });
+
   const result = $derived.by(() => {
     let civilians = 0;
     let total = 0;
@@ -55,7 +66,7 @@
   });
 </script>
 
-{#if result !== null || blockadeResult !== null}
+{#if result !== null || blockadeResult !== null || agentCounts.fb + agentCounts.at + agentCounts.pf > 0}
   <div class="panel">
     {#if result !== null}
       <div class="row">
@@ -83,6 +94,15 @@
         <span class="value"
           >{blockadeResult.pct.toFixed(1)}<span class="max">%</span></span
         >
+      </div>
+    {/if}
+    {#if agentCounts.fb + agentCounts.at + agentCounts.pf > 0}
+      <div class="divider"></div>
+      <div class="agent-counts">
+        <span class="agent-item" title="Fire Brigade">🚒 {agentCounts.fb}</span>
+        <span class="agent-item" title="Ambulance Team">🚑 {agentCounts.at}</span>
+        <span class="agent-item" title="Police Force">🚜 {agentCounts.pf}</span>
+        <span class="agent-item" title="Civilian">🧍 {agentCounts.cv}</span>
       </div>
     {/if}
   </div>
@@ -122,6 +142,24 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+  }
+
+  .divider {
+    height: 1px;
+    background: rgba(0, 200, 255, 0.1);
+    margin: 2px 0;
+  }
+
+  .agent-counts {
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+  }
+
+  .agent-item {
+    font-size: 12px;
+    color: #a8c8d8;
+    font-variant-numeric: tabular-nums;
   }
 
   .max {
