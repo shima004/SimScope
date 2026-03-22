@@ -567,6 +567,12 @@
       controller: true,
       layers: [],
       getCursor: ({ isDragging }) => (isDragging ? "grabbing" : "crosshair"),
+      onClick: (info) => {
+        if (!info.picked) {
+          if (get(pinnedAgentId) === null) selectedId.set(null);
+          inspectedId.set(null);
+        }
+      },
       onViewStateChange: ({ viewState }) => {
         const z = (viewState as OrthographicViewState).zoom;
         if (typeof z === "number") currentZoom = z;
