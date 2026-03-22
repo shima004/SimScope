@@ -52,7 +52,10 @@ function cleanupDir(sz: SevenZipModule, dir: string) {
  * Extract an archive and return all contained files as a path → bytes map.
  * Paths are relative (e.g. "INITIAL_CONDITIONS", "1/UPDATES").
  * Windows Zone.Identifier alternate data stream files are excluded.
- * Supports .7z, .tgz, .tar.gz formats.
+ * Supports .7z, .tgz, .tar.gz, .xz, .lzma formats.
+ *
+ * For single-file formats (.xz/.lzma) that decompress to a raw RCRS log,
+ * the map will contain a single entry keyed "__raw_log__".
  */
 export async function extract7zAllFiles(
   buffer: ArrayBuffer,
@@ -61,10 +64,14 @@ export async function extract7zAllFiles(
   const sz = await getModule();
   const id = ++extractCounter;
 
-  // Normalise .tar.gz → .tgz so the extension is a single token
-  const ext = filename.endsWith(".tar.gz")
-    ? ".tgz"
-    : filename.slice(filename.lastIndexOf("."));
+  // Normalise extensions to a single token
+  let ext: string;
+  if (filename.endsWith(".tar.gz")) {
+    ext = ".tgz";
+  } else {
+    ext = filename.slice(filename.lastIndexOf("."));
+  }
+
   const inPath = `/in_${id}${ext}`;
   const outDir = `/out_${id}`;
 
@@ -93,6 +100,21 @@ export async function extract7zAllFiles(
       sz.FS.rmdir(outDir);
       sz.FS.unlink(inPath);
       return result;
+    }
+  }
+
+  // .xz / .lzma decompresses to a single raw file (RCRS log frame stream)
+  if (ext === ".xz" || ext === ".lzma") {
+    const entries = sz.FS.readdir(outDir).filter(
+      (n: string) => n !== "." && n !== "..",
+    );
+    if (entries.length === 1) {
+      const rawPath = `${outDir}/${entries[0]}`;
+      const bytes = sz.FS.readFile(rawPath);
+      sz.FS.unlink(rawPath);
+      sz.FS.rmdir(outDir);
+      sz.FS.unlink(inPath);
+      return new Map([["__raw_log__", bytes]]);
     }
   }
 

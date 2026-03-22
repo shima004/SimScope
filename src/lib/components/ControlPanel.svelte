@@ -163,7 +163,7 @@
       <input
         bind:this={fileInput}
         type="file"
-        accept=".7z,.tgz,.tar.gz"
+        accept=".7z,.tgz,.tar.gz,.xz,.lzma"
         style="display:none"
         onchange={handleFileChange}
       />

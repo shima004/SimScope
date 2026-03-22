@@ -1,6 +1,6 @@
 import { LogProto as LogProtoCodec } from "$lib/proto/RCRSLogProto";
 import type { ChangeSetProto, EntityProto } from "$lib/proto/RCRSProto";
-import { applyChanges, decodeEntity } from "$lib/rcrs/decoder";
+import { applyChanges, decodeEntity, readDelimitedFrames } from "$lib/rcrs/decoder";
 import type { SimEntity } from "$lib/rcrs/types";
 import {
   CommandURN,
@@ -353,6 +353,28 @@ export function disconnectWS() {
 
 async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   const files = await extract7zAllFiles(raw, filename);
+
+  // .xz/.lzma: single raw RCRS log (delimited LogProto frame stream)
+  const rawLog = files.get("__raw_log__");
+  if (rawLog) {
+    for (const frame of readDelimitedFrames(rawLog.buffer)) {
+      handleLogFrame(LogProtoCodec.decode(frame));
+    }
+    const step1 = new Map<number, SimEntity>(
+      Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }]),
+    );
+    const step1changes = timeline.get(1);
+    if (step1changes) applyChanges(step1, step1changes);
+    let totalCost = 0;
+    for (const e of step1.values()) {
+      if ("repairCost" in e)
+        totalCost += (e as { repairCost: number }).repairCost;
+    }
+    initialBlockadeCost.set(totalCost);
+    currentStep.set(0);
+    rebuildState(0);
+    return;
+  }
 
   // INITIAL_CONDITIONS may be at top level or inside a subdirectory (e.g. rescue.log/)
   const configKey = Array.from(files.keys()).find((k) => k.endsWith("CONFIG"));
