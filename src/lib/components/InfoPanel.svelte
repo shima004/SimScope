@@ -52,6 +52,16 @@
   const showDual = $derived(
     $pinnedAgentId !== null && $inspectedEntity !== null,
   );
+
+  // 展開中のチャンネル番号セット
+  let openChannels = $state<Set<number>>(new Set());
+  function toggleChannel(ch: number) {
+    openChannels = new Set(
+      openChannels.has(ch)
+        ? [...openChannels].filter((x) => x !== ch)
+        : [...openChannels, ch],
+    );
+  }
 </script>
 
 {#snippet entityProps(
@@ -236,36 +246,59 @@
 
       <!-- Received communications — ピン止めパネル非表示、選択パネルのみ -->
       {#if !isPinned && isAgent(e.urn) && $agentReceivedComms}
-        {@const sortedComms = [...$agentReceivedComms].sort(
-          (a, b) => a.channel - b.channel,
-        )}
+        {@const subChs = [...new Set([0, ...($agentSubscriptions.get(e.id) ?? [])])].sort((a, b) => a - b)}
+        {@const byChannel = new Map(subChs.map(ch => [ch, $agentReceivedComms!.filter(m => m.channel === ch)]))}
         <div class="section-label">
           Communications ({$agentReceivedComms.length})
         </div>
-        <div class="comm-list">
-          {#each sortedComms as msg}
-            {@const sender = $entities.get(msg.senderId)}
-            {@const chColor = channelColorCSS(msg.channel)}
-            <div class="comm-entry" style="--ch-color:{chColor}">
-              <div class="comm-header">
-                <span class="comm-type"
-                  >{EntityURNLabel[sender?.urn ?? 0] ?? "Unknown"}</span
-                >
-                <button
-                  class="comm-id"
-                  onclick={() =>
-                    $pinnedAgentId !== null
-                      ? inspectedId.set(msg.senderId)
-                      : selectedId.set(msg.senderId)}
-                >
-                  #{msg.senderId}
-                </button>
-                <span class="comm-ch">ch.{msg.channel}</span>
+        <div class="comm-ch-list">
+          {#each subChs as ch}
+            {@const msgs = byChannel.get(ch) ?? []}
+            {@const chColor = channelColorCSS(ch)}
+            {@const open = openChannels.has(ch)}
+            <button
+              class="ch-btn"
+              style="--ch-color:{chColor}"
+              onclick={(ev) => { ev.stopPropagation(); toggleChannel(ch); }}
+            >
+              <span class="ch-label">ch.{ch}</span>
+              <span class="ch-count">{msgs.length} msg</span>
+              <span class="ch-arrow">{open ? "▾" : "▸"}</span>
+            </button>
+            {#if open && msgs.length > 0}
+              {@const agentTypeOrder: Record<number, number> = {
+                [EntityURN.FIRE_BRIGADE]: 0,
+                [EntityURN.AMBULANCE_TEAM]: 1,
+                [EntityURN.POLICE_FORCE]: 2,
+                [EntityURN.CIVILIAN]: 3,
+              }}
+              {@const sortedMsgs = [...msgs].sort((a, b) => {
+                const ua = $entities.get(a.senderId)?.urn ?? 9999;
+                const ub = $entities.get(b.senderId)?.urn ?? 9999;
+                const oa = agentTypeOrder[ua] ?? 4;
+                const ob = agentTypeOrder[ub] ?? 4;
+                return oa !== ob ? oa - ob : a.senderId - b.senderId;
+              })}
+              <div class="ch-senders">
+                {#each sortedMsgs as msg, i}
+                  {@const sender = $entities.get(msg.senderId)}
+                  {@const prevSender = i > 0 ? $entities.get(sortedMsgs[i - 1].senderId) : null}
+                  {#if i > 0 && msg.senderId !== sortedMsgs[i - 1].senderId}
+                    <div class="sender-divider"></div>
+                  {/if}
+                  <button
+                    class="comm-id"
+                    onclick={() =>
+                      $pinnedAgentId !== null
+                        ? inspectedId.set(msg.senderId)
+                        : selectedId.set(msg.senderId)}
+                  >
+                    <span class="comm-type">{EntityURNLabel[sender?.urn ?? 0] ?? "?"}</span>
+                    #{msg.senderId}
+                  </button>
+                {/each}
               </div>
-              {#if msg.text}
-                <div class="comm-text">"{msg.text}"</div>
-              {/if}
-            </div>
+            {/if}
           {/each}
         </div>
       {/if}
@@ -369,6 +402,8 @@
     backdrop-filter: blur(6px);
     box-shadow: 0 0 20px rgba(0, 180, 255, 0.08);
     z-index: 10;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
   }
 
   .panel-pinned {
@@ -531,6 +566,63 @@
     background: rgba(255, 200, 60, 0.1);
   }
 
+  .comm-ch-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .ch-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid color-mix(in srgb, var(--ch-color) 30%, transparent);
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+  }
+  .ch-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .ch-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ch-color);
+    min-width: 32px;
+  }
+
+  .ch-count {
+    font-size: 11px;
+    color: #a8c8d8;
+    flex: 1;
+  }
+
+  .ch-arrow {
+    font-size: 10px;
+    color: #607080;
+  }
+
+  .ch-senders {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px 0 4px 12px;
+    border-left: 2px solid rgba(0, 200, 255, 0.15);
+    margin-left: 8px;
+  }
+
+  .sender-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 2px 0;
+  }
+
   .comm-list {
     display: flex;
     flex-direction: column;
@@ -568,7 +660,7 @@
   .comm-id {
     background: none;
     border: none;
-    color: #80b0c8;
+    color: #a8c8d8;
     font-size: 11px;
     cursor: pointer;
     padding: 0;
