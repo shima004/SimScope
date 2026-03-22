@@ -57,11 +57,39 @@
   let playSpeed = $state(1); // steps/sec multiplier
   const SPEEDS = [0.5, 1, 2, 4, 8];
 
-  // positionHistory = [x0,y0, x1,y1, ...] の経路上を t (0→1) で補間
+  function easeInOut(t: number): number {
+    return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+  }
+
+  // Catmull-Rom スプライン: p1→p2 間を t (0→1) で補間
+  function catmullRom(
+    p0: [number, number], p1: [number, number],
+    p2: [number, number], p3: [number, number],
+    t: number,
+  ): [number, number] {
+    const t2 = t * t, t3 = t2 * t;
+    return [
+      0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+      0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
+    ];
+  }
+
+  // positionHistory = [x0,y0, x1,y1, ...] の経路上を t (0→1) でスプライン補間
   function posOnPath(hist: number[], t: number): [number, number] {
     const pts: [number, number][] = [];
     for (let i = 0; i + 1 < hist.length; i += 2) pts.push([hist[i], hist[i + 1]]);
-    if (pts.length < 2) return pts[0] ?? [0, 0];
+    if (pts.length === 0) return [0, 0];
+    if (pts.length === 1) return pts[0];
+
+    // ease-in-out を適用
+    const et = easeInOut(t);
+
+    if (pts.length === 2) {
+      // 2点のみは線形 + easing
+      return [pts[0][0] + (pts[1][0] - pts[0][0]) * et, pts[0][1] + (pts[1][1] - pts[0][1]) * et];
+    }
+
+    // セグメント長に基づいて進行位置を求める
     const lens: number[] = [];
     let total = 0;
     for (let i = 0; i + 1 < pts.length; i++) {
@@ -70,11 +98,17 @@
       total += d;
     }
     if (total === 0) return pts[pts.length - 1];
-    let rem = t * total;
+
+    let rem = et * total;
     for (let i = 0; i < lens.length; i++) {
-      if (rem <= lens[i]) {
-        const s = lens[i] === 0 ? 0 : rem / lens[i];
-        return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * s, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * s];
+      if (rem <= lens[i] || i === lens.length - 1) {
+        const s = lens[i] === 0 ? 0 : Math.min(rem / lens[i], 1);
+        // ファントム点（端点を繰り返す）を使って Catmull-Rom 適用
+        const p0 = pts[Math.max(0, i - 1)];
+        const p1 = pts[i];
+        const p2 = pts[Math.min(pts.length - 1, i + 1)];
+        const p3 = pts[Math.min(pts.length - 1, i + 2)];
+        return catmullRom(p0, p1, p2, p3, s);
       }
       rem -= lens[i];
     }
