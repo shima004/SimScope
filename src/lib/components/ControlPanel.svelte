@@ -13,8 +13,11 @@
     maxStep,
     mode,
     perceptionViewMode,
+    pinnedAgentId,
     seekToStep,
+    selectedEntity,
   } from "$lib/stores/simulation";
+  import { isAgent, isCommandCenter } from "$lib/rcrs/urns";
   import { onMount } from "svelte";
 
   // /proxy?host=<tcp-host>&port=<tcp-port> → Vite の tcpWsProxyPlugin が中継
@@ -257,6 +260,7 @@
     <button
       class="btn follow"
       class:active={$perceptionViewMode}
+      disabled={$pinnedAgentId === null && !isAgent($selectedEntity?.urn ?? 0) && !isCommandCenter($selectedEntity?.urn ?? 0)}
       onclick={() => perceptionViewMode.update((v) => !v)}
       title="選択エージェントの知覚世界を表示"
       >{$perceptionViewMode ? "👁 Perception ON" : "👁 Perception OFF"}</button
