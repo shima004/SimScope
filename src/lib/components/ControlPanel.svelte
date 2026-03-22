@@ -47,6 +47,7 @@
   let playInterval: ReturnType<typeof setInterval> | null = null;
   let showConfig = $state(false);
   let openGroups = $state<Set<string>>(new Set());
+  let inputsCollapsed = $state(false);
 
   const configGroups = $derived.by(() => {
     const map = new Map<string, { subkey: string; value: string }[]>();
@@ -119,6 +120,12 @@
 </script>
 
 <div class="ctrl-panel">
+  <div class="inputs-header" role="button" tabindex="0" onclick={() => (inputsCollapsed = !inputsCollapsed)} onkeydown={(e) => e.key === 'Enter' && (inputsCollapsed = !inputsCollapsed)}>
+    <span class="section-label">Connection</span>
+    <span class="collapse-arrow">{inputsCollapsed ? "▸" : "▾"}</span>
+  </div>
+
+  {#if !inputsCollapsed}
   <!-- WebSocket section -->
   <section>
     <span class="section-label">TCP Server</span>
@@ -189,6 +196,7 @@
   {#if $errorMsg}
     <div class="error">{$errorMsg}</div>
   {/if}
+  {/if}
 
   <!-- Timeline (file mode) -->
   {#if $mode === "file" && $maxStep > 0}
@@ -239,32 +247,29 @@
     </section>
   {/if}
 
-  <!-- Kernel config button (WS mode) -->
-  {#if Object.keys($kernelConfig).length > 0}
-    <button class="btn primary" onclick={() => (showConfig = true)}
-      >Kernel Config</button
-    >
-  {/if}
-
   {#if $mode !== "idle" && $maxStep > 0}
-    <button
-      class="btn follow"
-      class:active={$followMode}
-      onclick={() => followMode.update((v) => !v)}
-      title="選択中のエージェントに追従"
-      >{$followMode ? "⊙ Follow ON" : "⊙ Follow OFF"}</button
-    >
-  {/if}
-
-  {#if $mode === "file" && $maxStep > 0}
-    <button
-      class="btn follow"
-      class:active={$perceptionViewMode}
-      disabled={$pinnedAgentId === null && !isAgent($selectedEntity?.urn ?? 0) && !isCommandCenter($selectedEntity?.urn ?? 0)}
-      onclick={() => perceptionViewMode.update((v) => !v)}
-      title="選択エージェントの知覚世界を表示"
-      >{$perceptionViewMode ? "👁 Perception ON" : "👁 Perception OFF"}</button
-    >
+    <div class="btn-row">
+      {#if Object.keys($kernelConfig).length > 0}
+        <button class="btn follow icon-btn" onclick={() => (showConfig = true)} title="Kernel Config">⚙️</button>
+      {/if}
+      <button
+        class="btn follow"
+        class:active={$followMode}
+        onclick={() => followMode.update((v) => !v)}
+        title="選択中のエージェントに追従"
+        >Follow</button
+      >
+      {#if $mode === "file"}
+        <button
+          class="btn follow"
+          class:active={$perceptionViewMode}
+          disabled={$pinnedAgentId === null && !isAgent($selectedEntity?.urn ?? 0) && !isCommandCenter($selectedEntity?.urn ?? 0)}
+          onclick={() => perceptionViewMode.update((v) => !v)}
+          title="選択エージェントの知覚世界を表示"
+          >Perception</button
+        >
+      {/if}
+    </div>
   {/if}
 </div>
 
@@ -334,6 +339,29 @@
     gap: 10px;
   }
 
+  .inputs-header {
+    display: flex;
+    align-items: center;
+    padding: 4px 2px;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 4px;
+  }
+  .inputs-header:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .inputs-header .section-label {
+    flex: 1;
+    margin-bottom: 0;
+  }
+  .inputs-header .collapse-arrow {
+    font-size: 13px;
+    color: #607080;
+  }
+  .inputs-header:hover .collapse-arrow {
+    color: #c8d8e8;
+  }
+
   .section-label {
     display: block;
     font-size: 10px;
@@ -393,6 +421,20 @@
   .btn.primary:hover {
     background: rgba(0, 180, 255, 0.25);
   }
+  .btn-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .btn-row .btn {
+    flex: 1;
+  }
+
+  .btn.icon-btn {
+    flex: 0;
+    padding: 6px 10px;
+  }
+
   .btn.follow {
     border: 1px solid rgba(0, 200, 255, 0.6);
     color: #00c8ff;
