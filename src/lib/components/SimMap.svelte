@@ -13,6 +13,7 @@
     agentActions,
     agentReceivedComms,
     agentVisibleIds,
+    animatedEntities,
     entities,
     focusPoint,
     followMode,
@@ -493,7 +494,7 @@
   // 同一ティックの複数ストア更新をバッチ化し buildLayers の重複呼び出しを防ぐ
   const layerArgs = derived(
     [
-      entities,
+      animatedEntities,
       perceivedEntities,
       perceptionViewMode,
       selectedId,

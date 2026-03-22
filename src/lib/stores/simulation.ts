@@ -35,6 +35,7 @@ export const errorMsg = writable<string | null>(null);
  * Used as the snapshot to replay from when scrubbing.
  */
 let baseEntities = new Map<number, SimEntity>();
+let _currentSnapshot = new Map<number, SimEntity>();
 
 /**
  * Per-timestep changes — only populated in file mode.
@@ -96,6 +97,7 @@ export interface AgentAction {
 }
 
 export const entities = writable<Map<number, SimEntity>>(new Map());
+export const animatedEntities = writable<Map<number, SimEntity>>(new Map());
 export const currentStep = writable(0);
 export const maxStep = writable(0);
 export const selectedId = writable<number | null>(null);
@@ -528,8 +530,23 @@ function rebuildState(targetStep: number) {
     if (changes) applyChanges(snapshot, changes);
   }
 
+  _currentSnapshot = snapshot;
   entities.set(snapshot);
+  animatedEntities.set(snapshot);
   agentActions.set(commandTimeline.get(targetStep) ?? new Map());
+}
+
+export function getCommandsAtStep(step: number): Map<number, AgentAction> {
+  return commandTimeline.get(step) ?? new Map();
+}
+
+export function computeNextSnapshot(nextStep: number): Map<number, SimEntity> {
+  const snapshot = new Map<number, SimEntity>(
+    Array.from(_currentSnapshot.entries()).map(([k, v]) => [k, { ...v }]),
+  );
+  const changes = timeline.get(nextStep);
+  if (changes) applyChanges(snapshot, changes);
+  return snapshot;
 }
 
 // ── Frame handling (shared by WS + file) ─────────────────────────────────────
@@ -551,7 +568,9 @@ function handleLogFrame(frame: LogProtoMsg) {
       if (entity) map.set(entity.id, entity);
     }
     baseEntities = new Map(map);
+    _currentSnapshot = new Map(map);
     entities.set(map);
+    animatedEntities.set(map);
   }
 
   if (frame.command) {

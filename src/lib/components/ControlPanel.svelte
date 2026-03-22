@@ -1,11 +1,16 @@
 <script lang="ts">
   import {
+    agentActions,
+    animatedEntities,
+    computeNextSnapshot,
     connected,
     connectWS,
     currentStep,
     disconnectWS,
+    entities,
     errorMsg,
     followMode,
+    getCommandsAtStep,
     kernelConfig,
     loadFile,
     loading,
@@ -17,8 +22,10 @@
     seekToStep,
     selectedEntity,
   } from "$lib/stores/simulation";
+  import type { SimEntity } from "$lib/rcrs/types";
   import { isAgent, isCommandCenter } from "$lib/rcrs/urns";
   import { onMount } from "svelte";
+  import { get } from "svelte/store";
 
   // /proxy?host=<tcp-host>&port=<tcp-port> → Vite の tcpWsProxyPlugin が中継
   const _q =
@@ -44,21 +51,103 @@
     }
   });
   let playing = $state(false);
-  let playInterval: ReturnType<typeof setInterval> | null = null;
+  let rafId: number | null = null;
+  let stepStartTime = 0;
+  let nextSnapshot: Map<number, SimEntity> | null = null;
   let playSpeed = $state(1); // steps/sec multiplier
   const SPEEDS = [0.5, 1, 2, 4, 8];
 
-  function startInterval() {
-    clearInterval(playInterval!);
-    playInterval = setInterval(() => {
-      if ($currentStep >= $maxStep) {
-        clearInterval(playInterval!);
-        playInterval = null;
-        playing = false;
-        return;
+  // positionHistory = [x0,y0, x1,y1, ...] の経路上を t (0→1) で補間
+  function posOnPath(hist: number[], t: number): [number, number] {
+    const pts: [number, number][] = [];
+    for (let i = 0; i + 1 < hist.length; i += 2) pts.push([hist[i], hist[i + 1]]);
+    if (pts.length < 2) return pts[0] ?? [0, 0];
+    const lens: number[] = [];
+    let total = 0;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const d = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+      lens.push(d);
+      total += d;
+    }
+    if (total === 0) return pts[pts.length - 1];
+    let rem = t * total;
+    for (let i = 0; i < lens.length; i++) {
+      if (rem <= lens[i]) {
+        const s = lens[i] === 0 ? 0 : rem / lens[i];
+        return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * s, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * s];
       }
-      seekToStep($currentStep + 1);
-    }, Math.round(400 / playSpeed));
+      rem -= lens[i];
+    }
+    return pts[pts.length - 1];
+  }
+
+  function interpolateEntities(
+    current: Map<number, SimEntity>,
+    next: Map<number, SimEntity>,
+    t: number,
+  ): Map<number, SimEntity> {
+    const result = new Map(current);
+    for (const [id, nextE] of next) {
+      const curE = current.get(id);
+      if (!curE || !('x' in curE) || !('x' in nextE)) continue;
+      const hist = (nextE as { positionHistory?: number[] }).positionHistory;
+      let nx: number, ny: number;
+      if (hist && hist.length >= 4) {
+        [nx, ny] = posOnPath(hist, t);
+      } else {
+        nx = (curE as { x: number }).x + ((nextE as { x: number }).x - (curE as { x: number }).x) * t;
+        ny = (curE as { y: number }).y + ((nextE as { y: number }).y - (curE as { y: number }).y) * t;
+      }
+      result.set(id, { ...curE, x: nx, y: ny });
+    }
+    return result;
+  }
+
+  function preAdvanceActions() {
+    if ($currentStep < $maxStep) {
+      agentActions.set(getCommandsAtStep($currentStep + 1));
+    }
+  }
+
+  function startPlayback() {
+    playing = true;
+    stepStartTime = performance.now();
+    nextSnapshot = $currentStep < $maxStep ? computeNextSnapshot($currentStep + 1) : null;
+    preAdvanceActions();
+
+    function tick(now: number) {
+      if (!playing) return;
+      const duration = 400 / playSpeed;
+      const elapsed = now - stepStartTime;
+
+      if (elapsed >= duration) {
+        if ($currentStep >= $maxStep) {
+          playing = false;
+          rafId = null;
+          return;
+        }
+        seekToStep($currentStep + 1);
+        stepStartTime = now - (elapsed % duration);
+        nextSnapshot = $currentStep < $maxStep ? computeNextSnapshot($currentStep + 1) : null;
+        preAdvanceActions();
+      } else if (nextSnapshot) {
+        animatedEntities.set(interpolateEntities(get(entities), nextSnapshot, elapsed / duration));
+      }
+
+      rafId = requestAnimationFrame(tick);
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function stopPlayback() {
+    playing = false;
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    nextSnapshot = null;
+    agentActions.set(getCommandsAtStep($currentStep));
   }
   let showConfig = $state(false);
   let openGroups = $state<Set<string>>(new Set());
@@ -107,26 +196,27 @@
 
   function togglePlay() {
     if (playing) {
-      clearInterval(playInterval!);
-      playInterval = null;
-      playing = false;
+      stopPlayback();
     } else {
-      playing = true;
-      startInterval();
+      startPlayback();
     }
   }
 
   function setSpeed(s: number) {
-    playSpeed = s;
-    if (playing) startInterval();
+    if (playing) {
+      const elapsed = performance.now() - stepStartTime;
+      const progress = Math.min(elapsed / (400 / playSpeed), 1);
+      playSpeed = s;
+      stepStartTime = performance.now() - progress * (400 / s);
+    } else {
+      playSpeed = s;
+    }
   }
 
   $effect(() => {
     // モードが変わったら自動再生を停止
     if ($mode !== "file") {
-      clearInterval(playInterval!);
-      playInterval = null;
-      playing = false;
+      stopPlayback();
     }
     // 再生開始時にConnectionを折りたたむ
     if ($mode !== "idle") {
