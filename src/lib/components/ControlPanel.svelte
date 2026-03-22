@@ -45,6 +45,21 @@
   });
   let playing = $state(false);
   let playInterval: ReturnType<typeof setInterval> | null = null;
+  let playSpeed = $state(1); // steps/sec multiplier
+  const SPEEDS = [0.5, 1, 2, 4, 8];
+
+  function startInterval() {
+    clearInterval(playInterval!);
+    playInterval = setInterval(() => {
+      if ($currentStep >= $maxStep) {
+        clearInterval(playInterval!);
+        playInterval = null;
+        playing = false;
+        return;
+      }
+      seekToStep($currentStep + 1);
+    }, Math.round(400 / playSpeed));
+  }
   let showConfig = $state(false);
   let openGroups = $state<Set<string>>(new Set());
   let inputsCollapsed = $state(false);
@@ -97,16 +112,13 @@
       playing = false;
     } else {
       playing = true;
-      playInterval = setInterval(() => {
-        if ($currentStep >= $maxStep) {
-          clearInterval(playInterval!);
-          playInterval = null;
-          playing = false;
-          return;
-        }
-        seekToStep($currentStep + 1);
-      }, 200);
+      startInterval();
     }
+  }
+
+  function setSpeed(s: number) {
+    playSpeed = s;
+    if (playing) startInterval();
   }
 
   $effect(() => {
@@ -236,6 +248,15 @@
           disabled={$currentStep >= $maxStep}
           aria-label="1ステップ進む">⏭</button
         >
+        <div class="speed-btns">
+          {#each SPEEDS as s}
+            <button
+              class="btn speed"
+              class:active={playSpeed === s}
+              onclick={() => setSpeed(s)}
+            >{s}x</button>
+          {/each}
+        </div>
       </div>
     </section>
   {/if}
@@ -518,8 +539,33 @@
 
   .playback-row {
     display: flex;
+    align-items: center;
     justify-content: center;
     gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .speed-btns {
+    display: flex;
+    gap: 3px;
+    margin-left: 4px;
+  }
+
+  .btn.speed {
+    font-size: 10px;
+    padding: 3px 5px;
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    color: #607080;
+    background: none;
+  }
+  .btn.speed:hover {
+    color: #a8c8d8;
+    border-color: rgba(0, 200, 255, 0.5);
+  }
+  .btn.speed.active {
+    color: #00c8ff;
+    border-color: rgba(0, 200, 255, 0.7);
+    background: rgba(0, 200, 255, 0.08);
   }
 
   .btn.icon {
