@@ -357,7 +357,7 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   // .xz/.lzma: single raw RCRS log (delimited LogProto frame stream)
   const rawLog = files.get("__raw_log__");
   if (rawLog) {
-    for (const frame of readDelimitedFrames(rawLog.buffer)) {
+    for (const frame of readDelimitedFrames(rawLog.buffer as ArrayBuffer)) {
       handleLogFrame(LogProtoCodec.decode(frame));
     }
     const step1 = new Map<number, SimEntity>(
