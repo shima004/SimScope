@@ -6,13 +6,16 @@
   import InjuredCivilianPanel from "$lib/components/InjuredCivilianPanel.svelte";
   import ScorePanel from "$lib/components/ScorePanel.svelte";
   import SimMap from "$lib/components/SimMap.svelte";
+  import TeamNamePanel from "$lib/components/TeamNamePanel.svelte";
   import { loading } from "$lib/stores/simulation";
+
 </script>
 
 <div class="app">
   <SimMap />
   <div class="left-col">
     <ControlPanel />
+    <TeamNamePanel />
     <ScorePanel />
     <ChannelFilterPanel />
   </div>
