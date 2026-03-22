@@ -72,7 +72,7 @@ let speakTimeline: Map<
   number,
   Map<number, { count: number; bytes: number }>
 > = new Map();
-let agentCommTimeline: Map<number, Map<number, { speak: number }>> = new Map();
+let agentCommTimeline: Map<number, Map<number, { speak: number; bytes: number }>> = new Map();
 let agentSubscribeTimeline: Map<number, Map<number, number[]>> = new Map();
 
 export interface CommMessage {
@@ -106,7 +106,7 @@ export const currentSpeakStats = writable<
 /** 通信可視化で非表示にするチャンネル番号のセット */
 export const hiddenChannels = writable<Set<number>>(new Set());
 /** agentId → AK_SPEAK件数 (current step) */
-export const agentCommStats = writable<Map<number, { speak: number }>>(new Map());
+export const agentCommStats = writable<Map<number, { speak: number; bytes: number }>>(new Map());
 /** agentId → サブスクライブ中のチャンネル番号[] (現ステップまでの最新 AK_SUBSCRIBE) */
 export const agentSubscriptions = writable<Map<number, number[]>>(new Map());
 /** 初期ステップの瓦礫 repairCost 合計（除去率計算用） */
@@ -590,8 +590,9 @@ function handleLogFrame(frame: LogProtoMsg) {
       const agentId = cmd.components[ComponentControlMsgURN.AgentID]?.entityID;
       if (agentId === undefined) continue;
       if (cmd.urn === CommandURN.AK_SPEAK) {
-        const cur = agentCommMap.get(agentId) ?? { speak: 0 };
-        agentCommMap.set(agentId, { speak: cur.speak + 1 });
+        const raw = cmd.components[ComponentCommandURN.Message]?.rawData;
+        const cur = agentCommMap.get(agentId) ?? { speak: 0, bytes: 0 };
+        agentCommMap.set(agentId, { speak: cur.speak + 1, bytes: cur.bytes + (raw?.length ?? 0) });
       } else if (cmd.urn === CommandURN.AK_SUBSCRIBE) {
         const channels = cmd.components[ComponentCommandURN.Channels]?.intList?.values ?? [];
         agentSubMap.set(agentId, channels);

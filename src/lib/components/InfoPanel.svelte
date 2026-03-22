@@ -117,7 +117,7 @@
         {#if commStat && commStat.speak > 0}
           <div class="row">
             <span class="key">Speak</span>
-            <span class="val">{commStat.speak}<span class="unit"> msg</span></span>
+            <span class="val">{commStat.speak}<span class="unit"> msg</span> · {commStat.bytes}<span class="unit"> B</span></span>
           </div>
         {/if}
         {@const subChannels = [
