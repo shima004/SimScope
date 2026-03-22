@@ -257,6 +257,10 @@
       inputsCollapsed = true;
     }
   });
+
+  $effect(() => {
+    if ($errorMsg) inputsCollapsed = false;
+  });
 </script>
 
 <div class="ctrl-panel">
