@@ -55,18 +55,22 @@
     selectedId.set(h.id);
     focusPoint.set({ x: h.x, y: h.y });
   }
+
+  let collapsed = $state(false);
 </script>
 
 {#if merged ? merged.length > 0 : injured.length > 0}
   <div class="panel" class:dual={!!merged}>
-    <div class="header">
+    <div class="header" role="button" tabindex="0" onclick={() => (collapsed = !collapsed)} onkeydown={(e) => e.key === 'Enter' && (collapsed = !collapsed)}>
       <span class="label">Injured Civilians</span>
-      {#if merged}
+      {#if merged && !collapsed}
         <span class="col-label perceived">👁 Perceived</span>
         <span class="col-label actual">Actual</span>
       {/if}
+      <span class="collapse-arrow">{collapsed ? "▸" : "▾"}</span>
     </div>
 
+    {#if !collapsed}
     <div class="list">
       {#if merged}
         {#each merged as row (row.id)}
@@ -132,6 +136,7 @@
         {/each}
       {/if}
     </div>
+    {/if}
   </div>
 {/if}
 
@@ -161,10 +166,25 @@
   .header {
     display: flex;
     align-items: center;
-    padding: 7px 10px 5px;
+    padding: 8px 10px 6px;
     border-bottom: 1px solid rgba(0, 200, 255, 0.1);
     flex-shrink: 0;
     gap: 4px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .header:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .collapse-arrow {
+    font-size: 13px;
+    color: #607080;
+    margin-left: auto;
+    line-height: 1;
+  }
+  .header:hover .collapse-arrow {
+    color: #c8d8e8;
   }
 
   .label {

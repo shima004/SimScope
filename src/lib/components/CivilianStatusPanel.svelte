@@ -141,10 +141,22 @@
     selectedId.set(h.id);
     focusPoint.set({ x: h.x, y: h.y });
   }
+
+  let collapsed = $state(false);
 </script>
 
 {#if hasAny}
   <div class="panel" class:dual={!!mergedCarried}>
+    <div class="panel-header" role="button" tabindex="0" onclick={() => (collapsed = !collapsed)} onkeydown={(e) => e.key === 'Enter' && (collapsed = !collapsed)}>
+      <span class="panel-label">Civilian Status</span>
+      {#if mergedCarried && !collapsed}
+        <span class="ch-col perceived">👁 Perceived</span>
+        <span class="ch-col actual">Actual</span>
+      {/if}
+      <span class="collapse-arrow">{collapsed ? "▸" : "▾"}</span>
+    </div>
+
+    {#if !collapsed}
     {#if mergedCarried}
       <!-- ── dual column header ── -->
       <div class="col-header">
@@ -352,6 +364,7 @@
         {/each}
       {/if}
     {/if}
+    {/if}
   </div>
 {/if}
 
@@ -368,24 +381,56 @@
     border-radius: 6px;
     color: #c8d8e8;
     font-size: 12px;
-    padding: 8px 10px;
     backdrop-filter: blur(6px);
     box-shadow: 0 0 20px rgba(0, 180, 255, 0.08);
     z-index: 10;
     display: flex;
     flex-direction: column;
     gap: 3px;
+    padding-bottom: 8px;
   }
 
   .panel.dual {
     width: 380px;
   }
 
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px 6px;
+    border-bottom: 1px solid rgba(0, 200, 255, 0.1);
+    flex-shrink: 0;
+    cursor: pointer;
+    user-select: none;
+  }
+  .panel-header:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .panel-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #00c8ff;
+    flex: 1;
+  }
+
+  .collapse-arrow {
+    font-size: 13px;
+    color: #607080;
+    line-height: 1;
+  }
+  .panel-header:hover .collapse-arrow {
+    color: #c8d8e8;
+  }
+
   .col-header {
     display: grid;
     grid-template-columns: 72px 1fr 1fr;
     gap: 4px;
-    padding-bottom: 4px;
+    padding: 4px 10px 4px;
     border-bottom: 1px solid rgba(0, 200, 255, 0.1);
     margin-bottom: 2px;
   }
@@ -410,7 +455,7 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #00c8ff;
-    padding: 4px 0 2px;
+    padding: 4px 10px 2px;
   }
   .section-label:not(:first-child) {
     margin-top: 4px;
@@ -422,7 +467,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 3px 4px;
+    padding: 3px 10px;
     border-radius: 3px;
     cursor: pointer;
     background: none;
