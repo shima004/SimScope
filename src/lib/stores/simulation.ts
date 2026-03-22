@@ -1,6 +1,10 @@
 import { LogProto as LogProtoCodec } from "$lib/proto/RCRSLogProto";
 import type { ChangeSetProto, EntityProto } from "$lib/proto/RCRSProto";
-import { applyChanges, decodeEntity, readDelimitedFrames } from "$lib/rcrs/decoder";
+import {
+  applyChanges,
+  decodeEntity,
+  readDelimitedFrames,
+} from "$lib/rcrs/decoder";
 import type { SimEntity } from "$lib/rcrs/types";
 import {
   CommandURN,
@@ -72,7 +76,10 @@ let speakTimeline: Map<
   number,
   Map<number, { count: number; bytes: number }>
 > = new Map();
-let agentCommTimeline: Map<number, Map<number, { speak: number; bytes: number }>> = new Map();
+let agentCommTimeline: Map<
+  number,
+  Map<number, { speak: number; bytes: number }>
+> = new Map();
 let agentSubscribeTimeline: Map<number, Map<number, number[]>> = new Map();
 
 export interface CommMessage {
@@ -106,7 +113,9 @@ export const currentSpeakStats = writable<
 /** 通信可視化で非表示にするチャンネル番号のセット */
 export const hiddenChannels = writable<Set<number>>(new Set());
 /** agentId → AK_SPEAK件数 (current step) */
-export const agentCommStats = writable<Map<number, { speak: number; bytes: number }>>(new Map());
+export const agentCommStats = writable<
+  Map<number, { speak: number; bytes: number }>
+>(new Map());
 /** agentId → サブスクライブ中のチャンネル番号[] (現ステップまでの最新 AK_SUBSCRIBE) */
 export const agentSubscriptions = writable<Map<number, number[]>>(new Map());
 /** 初期ステップの瓦礫 repairCost 合計（除去率計算用） */
@@ -245,7 +254,7 @@ export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
     // エリアの blockades リストに載っている瓦礫 ID を収集
     const referencedBlockades = new Set<number>();
     for (const e of snapshot.values()) {
-      if (isArea(e.urn) && 'blockades' in e) {
+      if (isArea(e.urn) && "blockades" in e) {
         for (const bid of (e as { blockades: number[] }).blockades)
           referencedBlockades.add(bid);
       }
@@ -468,14 +477,18 @@ export async function loadUrl(
   errorMsg.set(null);
   mode.set("file");
   reset();
+  // 外部URLはCORSを回避するためプロキシ経由で取得
+  const fetchUrl = url.startsWith("http")
+    ? `/fetch-proxy?url=${encodeURIComponent(url)}`
+    : url;
   try {
-    const head = await fetch(url, { method: "HEAD" });
+    const head = await fetch(fetchUrl, { method: "HEAD" });
     if (head.status === 404) {
       mode.set("idle");
       return "not_found";
     }
     if (!head.ok) throw new Error(`HTTP ${head.status}`);
-    const res = await fetch(url);
+    const res = await fetch(fetchUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const filename = url.split("/").pop()?.split("?")[0] ?? "archive.7z";
     await loadRaw(await res.arrayBuffer(), filename);
@@ -553,7 +566,8 @@ function handleLogFrame(frame: LogProtoMsg) {
         cmd.urn === CommandURN.AK_SAY ||
         cmd.urn === CommandURN.AK_TELL ||
         cmd.urn === CommandURN.AK_SUBSCRIBE
-      ) continue;
+      )
+        continue;
       const agentId = cmd.components[ComponentControlMsgURN.AgentID]?.entityID;
       if (agentId === undefined) continue;
       const action: AgentAction = { urn: cmd.urn };
@@ -592,9 +606,13 @@ function handleLogFrame(frame: LogProtoMsg) {
       if (cmd.urn === CommandURN.AK_SPEAK) {
         const raw = cmd.components[ComponentCommandURN.Message]?.rawData;
         const cur = agentCommMap.get(agentId) ?? { speak: 0, bytes: 0 };
-        agentCommMap.set(agentId, { speak: cur.speak + 1, bytes: cur.bytes + (raw?.length ?? 0) });
+        agentCommMap.set(agentId, {
+          speak: cur.speak + 1,
+          bytes: cur.bytes + (raw?.length ?? 0),
+        });
       } else if (cmd.urn === CommandURN.AK_SUBSCRIBE) {
-        const channels = cmd.components[ComponentCommandURN.Channels]?.intList?.values ?? [];
+        const channels =
+          cmd.components[ComponentCommandURN.Channels]?.intList?.values ?? [];
         agentSubMap.set(agentId, channels);
       }
     }
