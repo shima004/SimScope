@@ -482,13 +482,11 @@ export async function loadUrl(
     ? `/fetch-proxy?url=${encodeURIComponent(url)}`
     : url;
   try {
-    const head = await fetch(fetchUrl, { method: "HEAD" });
-    if (head.status === 404) {
+    const res = await fetch(fetchUrl);
+    if (res.status === 404) {
       mode.set("idle");
       return "not_found";
     }
-    if (!head.ok) throw new Error(`HTTP ${head.status}`);
-    const res = await fetch(fetchUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const filename = url.split("/").pop()?.split("?")[0] ?? "archive.7z";
     await loadRaw(await res.arrayBuffer(), filename);

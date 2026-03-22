@@ -22,16 +22,3 @@ export const GET: RequestHandler = async ({ url }) => {
   }
 };
 
-export const HEAD: RequestHandler = async ({ url }) => {
-  const target = url.searchParams.get("url");
-  if (!target) {
-    return new Response(null, { status: 400 });
-  }
-
-  try {
-    const upstream = await fetch(target, { method: "HEAD" });
-    return new Response(null, { status: upstream.status });
-  } catch {
-    return new Response(null, { status: 502 });
-  }
-};
