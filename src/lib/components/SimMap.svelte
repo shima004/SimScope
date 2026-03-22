@@ -121,7 +121,8 @@
     const agents: HumanEntity[] = [];
 
     for (const e of emap.values()) {
-      if (e.urn === EntityURN.ROAD || e.urn === EntityURN.HYDRANT) roads.push(e as RoadEntity);
+      if (e.urn === EntityURN.ROAD || e.urn === EntityURN.HYDRANT)
+        roads.push(e as RoadEntity);
       else if (isBuilding(e.urn)) buildings.push(e as BuildingEntity);
       else if (e.urn === EntityURN.BLOCKADE)
         blockades.push(e as BlockadeEntity);
@@ -154,7 +155,8 @@
 
     for (const [agentId, action] of actions) {
       // Perception ON 時は現ステップの知覚 ID のみ、それ以外は emap に存在するもののみ
-      if (perceivedIds ? !perceivedIds.has(agentId) : !emap.has(agentId)) continue;
+      if (perceivedIds ? !perceivedIds.has(agentId) : !emap.has(agentId))
+        continue;
       if (action.urn === CommandURN.AK_CLEAR && action.target !== undefined) {
         clearingTargets.add(action.target);
       } else if (
@@ -490,23 +492,45 @@
   // レイヤー構築に必要な全ストアを1つの derived にまとめる
   // 同一ティックの複数ストア更新をバッチ化し buildLayers の重複呼び出しを防ぐ
   const layerArgs = derived(
-    [entities, perceivedEntities, perceptionViewMode, selectedId, agentActions, kernelConfig, agentVisibleIds, agentReceivedComms, hiddenChannels],
+    [
+      entities,
+      perceivedEntities,
+      perceptionViewMode,
+      selectedId,
+      agentActions,
+      kernelConfig,
+      agentVisibleIds,
+      agentReceivedComms,
+      hiddenChannels,
+    ],
     ([$e, $pe, $pvm, $sel, $aa, $kc, $avi, $arc, $hc]) => ({
-      emap:  $pvm ? $pe : $e,
+      emap: $pvm ? $pe : $e,
       selId: $sel,
       actions: $aa,
-      cfg:  $kc,
+      cfg: $kc,
       perceivedIds: $avi,
       comms: $arc,
       hiddenChs: $hc,
     }),
   );
 
-  const unsubLayers = layerArgs.subscribe(({ emap, selId, actions, cfg, perceivedIds, comms, hiddenChs }) => {
-    if (!deck) return;
-    deck.setProps({ layers: buildLayers(emap, selId, actions, cfg, perceivedIds, comms, hiddenChs) });
-    followAgent(emap, selId);
-  });
+  const unsubLayers = layerArgs.subscribe(
+    ({ emap, selId, actions, cfg, perceivedIds, comms, hiddenChs }) => {
+      if (!deck) return;
+      deck.setProps({
+        layers: buildLayers(
+          emap,
+          selId,
+          actions,
+          cfg,
+          perceivedIds,
+          comms,
+          hiddenChs,
+        ),
+      });
+      followAgent(emap, selId);
+    },
+  );
 
   // 実世界エンティティが初めてロードされたときにビューポートをフィット
   const unsubFit = entities.subscribe((emap) => {

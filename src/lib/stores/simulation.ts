@@ -533,6 +533,13 @@ function handleLogFrame(frame: LogProtoMsg) {
     const { time, commands: cmds } = frame.command;
     const actionMap = new Map<number, AgentAction>();
     for (const cmd of cmds) {
+      // 通信コマンドは行動マップに含めない（メイン行動を上書きしないため）
+      if (
+        cmd.urn === CommandURN.AK_SPEAK ||
+        cmd.urn === CommandURN.AK_SAY ||
+        cmd.urn === CommandURN.AK_TELL ||
+        cmd.urn === CommandURN.AK_SUBSCRIBE
+      ) continue;
       const agentId = cmd.components[ComponentControlMsgURN.AgentID]?.entityID;
       if (agentId === undefined) continue;
       const action: AgentAction = { urn: cmd.urn };
