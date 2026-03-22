@@ -61,7 +61,13 @@
 
 {#if merged ? merged.length > 0 : injured.length > 0}
   <div class="panel" class:dual={!!merged}>
-    <div class="header" role="button" tabindex="0" onclick={() => (collapsed = !collapsed)} onkeydown={(e) => e.key === 'Enter' && (collapsed = !collapsed)}>
+    <div
+      class="header"
+      role="button"
+      tabindex="0"
+      onclick={() => (collapsed = !collapsed)}
+      onkeydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
+    >
       <span class="label">Injured Civilians</span>
       {#if merged && !collapsed}
         <span class="col-label perceived">👁 Perceived</span>
@@ -71,71 +77,72 @@
     </div>
 
     {#if !collapsed}
-    <div class="list">
-      {#if merged}
-        {#each merged as row (row.id)}
-          {@const rep = row.p ?? row.a!}
-          <button
-            class="row dual-row"
-            onclick={() => focusOn(row)}
-            class:selected={$selectedId === row.id}
-          >
-            <span class="cid" style="color:{entityColor(rep.urn)}"
-              >#{row.id}</span
+      <div class="list">
+        {#if merged}
+          {#each merged as row (row.id)}
+            {@const rep = row.p ?? row.a!}
+            <button
+              class="row dual-row"
+              onclick={() => focusOn(row)}
+              class:selected={$selectedId === row.id}
             >
-            <span class="dual-cell">
-              {#if row.p}
-                <span class="bar-wrap"
-                  ><span
-                    class="bar"
-                    style="width:{Math.min(100, row.p.hp / 100)}%"
-                  ></span></span
-                >
-                <span class="num">{row.p.hp.toLocaleString()}</span>
-                {#if row.p.damage > 0}<span class="badge dmg"
-                    >D:{row.p.damage}</span
-                  >{/if}
-              {/if}
-            </span>
-            <span class="dual-cell">
-              {#if row.a}
-                <span class="bar-wrap"
-                  ><span
-                    class="bar"
-                    style="width:{Math.min(100, row.a.hp / 100)}%"
-                  ></span></span
-                >
-                <span class="num">{row.a.hp.toLocaleString()}</span>
-                {#if row.a.damage > 0}<span class="badge dmg"
-                    >D:{row.a.damage}</span
-                  >{/if}
-              {/if}
-            </span>
-          </button>
-        {/each}
-      {:else}
-        {#each injured as h (h.id)}
-          <button
-            class="row"
-            onclick={() => {
-              selectedId.set(h.id);
-              focusPoint.set({ x: h.x, y: h.y });
-            }}
-            class:selected={$selectedId === h.id}
-          >
-            <span class="cid" style="color:{entityColor(h.urn)}">#{h.id}</span>
-            <span class="stat">
-              <span class="bar-wrap"
-                ><span class="bar" style="width:{Math.min(100, h.hp / 100)}%"
-                ></span></span
+              <span class="cid" style="color:{entityColor(rep.urn)}"
+                >#{row.id}</span
               >
-              <span class="num">{h.hp.toLocaleString()}</span>
-            </span>
-            <span class="badge dmg">D:{h.damage}</span>
-          </button>
-        {/each}
-      {/if}
-    </div>
+              <span class="dual-cell">
+                {#if row.p}
+                  <span class="bar-wrap"
+                    ><span
+                      class="bar"
+                      style="width:{Math.min(100, row.p.hp / 100)}%"
+                    ></span></span
+                  >
+                  <span class="num">{row.p.hp.toLocaleString()}</span>
+                  {#if row.p.damage > 0}<span class="badge dmg"
+                      >D:{row.p.damage}</span
+                    >{/if}
+                {/if}
+              </span>
+              <span class="dual-cell">
+                {#if row.a}
+                  <span class="bar-wrap"
+                    ><span
+                      class="bar"
+                      style="width:{Math.min(100, row.a.hp / 100)}%"
+                    ></span></span
+                  >
+                  <span class="num">{row.a.hp.toLocaleString()}</span>
+                  {#if row.a.damage > 0}<span class="badge dmg"
+                      >D:{row.a.damage}</span
+                    >{/if}
+                {/if}
+              </span>
+            </button>
+          {/each}
+        {:else}
+          {#each injured as h (h.id)}
+            <button
+              class="row"
+              onclick={() => {
+                selectedId.set(h.id);
+                focusPoint.set({ x: h.x, y: h.y });
+              }}
+              class:selected={$selectedId === h.id}
+            >
+              <span class="cid" style="color:{entityColor(h.urn)}">#{h.id}</span
+              >
+              <span class="stat">
+                <span class="bar-wrap"
+                  ><span class="bar" style="width:{Math.min(100, h.hp / 100)}%"
+                  ></span></span
+                >
+                <span class="num">{h.hp.toLocaleString()}</span>
+              </span>
+              <span class="badge dmg">D:{h.damage}</span>
+            </button>
+          {/each}
+        {/if}
+      </div>
     {/if}
   </div>
 {/if}

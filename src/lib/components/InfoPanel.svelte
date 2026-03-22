@@ -127,7 +127,13 @@
         {#if commStat && commStat.speak > 0}
           <div class="row">
             <span class="key">Speak</span>
-            <span class="val">{commStat.speak}<span class="unit"> msg</span> · {commStat.bytes}<span class="unit"> B</span></span>
+            <span class="val"
+              >{commStat.speak}<span class="unit"> msg</span> · {commStat.bytes}<span
+                class="unit"
+              >
+                B</span
+              ></span
+            >
           </div>
         {/if}
         {@const subChannels = [
@@ -246,8 +252,15 @@
 
       <!-- Received communications — ピン止めパネル非表示、選択パネルのみ -->
       {#if !isPinned && isAgent(e.urn) && $agentReceivedComms}
-        {@const subChs = [...new Set([0, ...($agentSubscriptions.get(e.id) ?? [])])].sort((a, b) => a - b)}
-        {@const byChannel = new Map(subChs.map(ch => [ch, $agentReceivedComms!.filter(m => m.channel === ch)]))}
+        {@const subChs = [
+          ...new Set([0, ...($agentSubscriptions.get(e.id) ?? [])]),
+        ].sort((a, b) => a - b)}
+        {@const byChannel = new Map(
+          subChs.map((ch) => [
+            ch,
+            $agentReceivedComms!.filter((m) => m.channel === ch),
+          ]),
+        )}
         <div class="section-label">
           Communications ({$agentReceivedComms.length})
         </div>
@@ -259,7 +272,10 @@
             <button
               class="ch-btn"
               style="--ch-color:{chColor}"
-              onclick={(ev) => { ev.stopPropagation(); toggleChannel(ch); }}
+              onclick={(ev) => {
+                ev.stopPropagation();
+                toggleChannel(ch);
+              }}
             >
               <span class="ch-label">ch.{ch}</span>
               <span class="ch-count">{msgs.length} msg</span>
@@ -282,7 +298,8 @@
               <div class="ch-senders">
                 {#each sortedMsgs as msg, i}
                   {@const sender = $entities.get(msg.senderId)}
-                  {@const prevSender = i > 0 ? $entities.get(sortedMsgs[i - 1].senderId) : null}
+                  {@const prevSender =
+                    i > 0 ? $entities.get(sortedMsgs[i - 1].senderId) : null}
                   {#if i > 0 && msg.senderId !== sortedMsgs[i - 1].senderId}
                     <div class="sender-divider"></div>
                   {/if}
@@ -293,7 +310,9 @@
                         ? inspectedId.set(msg.senderId)
                         : selectedId.set(msg.senderId)}
                   >
-                    <span class="comm-type">{EntityURNLabel[sender?.urn ?? 0] ?? "?"}</span>
+                    <span class="comm-type"
+                      >{EntityURNLabel[sender?.urn ?? 0] ?? "?"}</span
+                    >
                     #{msg.senderId}
                   </button>
                 {/each}

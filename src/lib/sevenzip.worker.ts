@@ -114,13 +114,20 @@ async function extract(
   return result;
 }
 
-self.onmessage = async (e: MessageEvent<{ buffer: ArrayBuffer; filename: string }>) => {
+self.onmessage = async (
+  e: MessageEvent<{ buffer: ArrayBuffer; filename: string }>,
+) => {
   try {
     const files = await extract(e.data.buffer, e.data.filename);
     // Uint8Array の underlying buffer を transfer して zero-copy で返す
     const entries = Array.from(files.entries());
-    const transfers: Transferable[] = entries.map(([, v]) => v.buffer as ArrayBuffer);
-    (self as unknown as DedicatedWorkerGlobalScope).postMessage({ ok: true, entries }, transfers);
+    const transfers: Transferable[] = entries.map(
+      ([, v]) => v.buffer as ArrayBuffer,
+    );
+    (self as unknown as DedicatedWorkerGlobalScope).postMessage(
+      { ok: true, entries },
+      transfers,
+    );
   } catch (err) {
     self.postMessage({ ok: false, error: String(err) });
   }

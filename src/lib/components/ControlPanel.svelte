@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { SimEntity } from "$lib/rcrs/types";
+  import { isAgent, isCommandCenter } from "$lib/rcrs/urns";
   import {
     agentActions,
     animatedEntities,
@@ -22,8 +24,6 @@
     seekToStep,
     selectedEntity,
   } from "$lib/stores/simulation";
-  import type { SimEntity } from "$lib/rcrs/types";
-  import { isAgent, isCommandCenter } from "$lib/rcrs/urns";
   import { onMount } from "svelte";
   import { get } from "svelte/store";
 
@@ -63,21 +63,33 @@
 
   // Catmull-Rom スプライン: p1→p2 間を t (0→1) で補間
   function catmullRom(
-    p0: [number, number], p1: [number, number],
-    p2: [number, number], p3: [number, number],
+    p0: [number, number],
+    p1: [number, number],
+    p2: [number, number],
+    p3: [number, number],
     t: number,
   ): [number, number] {
-    const t2 = t * t, t3 = t2 * t;
+    const t2 = t * t,
+      t3 = t2 * t;
     return [
-      0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
-      0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
+      0.5 *
+        (2 * p1[0] +
+          (-p0[0] + p2[0]) * t +
+          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+      0.5 *
+        (2 * p1[1] +
+          (-p0[1] + p2[1]) * t +
+          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
     ];
   }
 
   // positionHistory = [x0,y0, x1,y1, ...] の経路上を t (0→1) でスプライン補間
   function posOnPath(hist: number[], t: number): [number, number] {
     const pts: [number, number][] = [];
-    for (let i = 0; i + 1 < hist.length; i += 2) pts.push([hist[i], hist[i + 1]]);
+    for (let i = 0; i + 1 < hist.length; i += 2)
+      pts.push([hist[i], hist[i + 1]]);
     if (pts.length === 0) return [0, 0];
     if (pts.length === 1) return pts[0];
 
@@ -86,14 +98,20 @@
 
     if (pts.length === 2) {
       // 2点のみは線形 + easing
-      return [pts[0][0] + (pts[1][0] - pts[0][0]) * et, pts[0][1] + (pts[1][1] - pts[0][1]) * et];
+      return [
+        pts[0][0] + (pts[1][0] - pts[0][0]) * et,
+        pts[0][1] + (pts[1][1] - pts[0][1]) * et,
+      ];
     }
 
     // セグメント長に基づいて進行位置を求める
     const lens: number[] = [];
     let total = 0;
     for (let i = 0; i + 1 < pts.length; i++) {
-      const d = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+      const d = Math.hypot(
+        pts[i + 1][0] - pts[i][0],
+        pts[i + 1][1] - pts[i][1],
+      );
       lens.push(d);
       total += d;
     }
@@ -123,14 +141,18 @@
     const result = new Map(current);
     for (const [id, nextE] of next) {
       const curE = current.get(id);
-      if (!curE || !('x' in curE) || !('x' in nextE)) continue;
+      if (!curE || !("x" in curE) || !("x" in nextE)) continue;
       const hist = (nextE as { positionHistory?: number[] }).positionHistory;
       let nx: number, ny: number;
       if (hist && hist.length >= 4) {
         [nx, ny] = posOnPath(hist, t);
       } else {
-        nx = (curE as { x: number }).x + ((nextE as { x: number }).x - (curE as { x: number }).x) * t;
-        ny = (curE as { y: number }).y + ((nextE as { y: number }).y - (curE as { y: number }).y) * t;
+        nx =
+          (curE as { x: number }).x +
+          ((nextE as { x: number }).x - (curE as { x: number }).x) * t;
+        ny =
+          (curE as { y: number }).y +
+          ((nextE as { y: number }).y - (curE as { y: number }).y) * t;
       }
       result.set(id, { ...curE, x: nx, y: ny });
     }
@@ -146,7 +168,8 @@
   function startPlayback() {
     playing = true;
     stepStartTime = performance.now();
-    nextSnapshot = $currentStep < $maxStep ? computeNextSnapshot($currentStep + 1) : null;
+    nextSnapshot =
+      $currentStep < $maxStep ? computeNextSnapshot($currentStep + 1) : null;
     preAdvanceActions();
 
     function tick(now: number) {
@@ -162,10 +185,15 @@
         }
         seekToStep($currentStep + 1);
         stepStartTime = now - (elapsed % duration);
-        nextSnapshot = $currentStep < $maxStep ? computeNextSnapshot($currentStep + 1) : null;
+        nextSnapshot =
+          $currentStep < $maxStep
+            ? computeNextSnapshot($currentStep + 1)
+            : null;
         preAdvanceActions();
       } else if (nextSnapshot) {
-        animatedEntities.set(interpolateEntities(get(entities), nextSnapshot, elapsed / duration));
+        animatedEntities.set(
+          interpolateEntities(get(entities), nextSnapshot, elapsed / duration),
+        );
       }
 
       rafId = requestAnimationFrame(tick);
@@ -264,82 +292,94 @@
 </script>
 
 <div class="ctrl-panel">
-  <div class="inputs-header" role="button" tabindex="0" onclick={() => (inputsCollapsed = !inputsCollapsed)} onkeydown={(e) => e.key === 'Enter' && (inputsCollapsed = !inputsCollapsed)}>
+  <div
+    class="inputs-header"
+    role="button"
+    tabindex="0"
+    onclick={() => (inputsCollapsed = !inputsCollapsed)}
+    onkeydown={(e) => e.key === "Enter" && (inputsCollapsed = !inputsCollapsed)}
+  >
     <span class="section-label">Connection</span>
     <span class="collapse-arrow">{inputsCollapsed ? "▸" : "▾"}</span>
   </div>
 
   {#if !inputsCollapsed}
-  <!-- WebSocket section -->
-  <section>
-    <span class="section-label">TCP Server</span>
-    <div class="row">
-      <input
-        class="url-input"
-        bind:value={tcpHost}
-        placeholder="host"
-        disabled={$mode === "ws"}
-      />
-      <input
-        class="port-input"
-        bind:value={tcpPort}
-        placeholder="port"
-        disabled={$mode === "ws"}
-      />
-      {#if $mode === "ws"}
-        <button class="btn danger" onclick={disconnectWS}>Cut</button>
-      {:else}
-        <button class="btn primary" onclick={handleConnect} disabled={$loading}
-          >Connect</button
-        >
-      {/if}
-    </div>
-    {#if $mode === "ws"}
-      <div class="status" class:online={$connected} class:offline={!$connected}>
-        {$connected ? "● Connected" : "○ Reconnecting…"}
+    <!-- WebSocket section -->
+    <section>
+      <span class="section-label">TCP Server</span>
+      <div class="row">
+        <input
+          class="url-input"
+          bind:value={tcpHost}
+          placeholder="host"
+          disabled={$mode === "ws"}
+        />
+        <input
+          class="port-input"
+          bind:value={tcpPort}
+          placeholder="port"
+          disabled={$mode === "ws"}
+        />
+        {#if $mode === "ws"}
+          <button class="btn danger" onclick={disconnectWS}>Cut</button>
+        {:else}
+          <button
+            class="btn primary"
+            onclick={handleConnect}
+            disabled={$loading}>Connect</button
+          >
+        {/if}
       </div>
+      {#if $mode === "ws"}
+        <div
+          class="status"
+          class:online={$connected}
+          class:offline={!$connected}
+        >
+          {$connected ? "● Connected" : "○ Reconnecting…"}
+        </div>
+      {/if}
+    </section>
+
+    <div class="divider">or</div>
+
+    <!-- File section -->
+    <section>
+      <span class="section-label">Log File</span>
+      <div class="row">
+        <button
+          class="btn primary"
+          onclick={() => fileInput?.click()}
+          disabled={$loading}
+        >
+          {$loading ? "Loading…" : "Open 7z tgz tar.gz xz log file"}
+        </button>
+        <input
+          bind:this={fileInput}
+          type="file"
+          accept=".7z,.tgz,.tar.gz,.xz,.lzma"
+          style="display:none"
+          onchange={handleFileChange}
+        />
+      </div>
+      <div class="row" style="margin-top: 8px;">
+        <input
+          class="url-input"
+          bind:value={logUrl}
+          placeholder="https://example.com/log.7z"
+          disabled={$loading}
+        />
+        <button
+          class="btn primary"
+          onclick={() => loadUrl(logUrl)}
+          disabled={$loading || !logUrl}>Load</button
+        >
+      </div>
+    </section>
+
+    {#if $errorMsg}
+      <div class="error">{$errorMsg}</div>
     {/if}
-  </section>
-
-  <div class="divider">or</div>
-
-  <!-- File section -->
-  <section>
-    <span class="section-label">Log File</span>
-    <div class="row">
-      <button
-        class="btn primary"
-        onclick={() => fileInput?.click()}
-        disabled={$loading}
-      >
-        {$loading ? "Loading…" : "Open 7z tgz tar.gz log file"}
-      </button>
-      <input
-        bind:this={fileInput}
-        type="file"
-        accept=".7z,.tgz,.tar.gz,.xz,.lzma"
-        style="display:none"
-        onchange={handleFileChange}
-      />
-    </div>
-    <div class="row" style="margin-top: 8px;">
-      <input
-        class="url-input"
-        bind:value={logUrl}
-        placeholder="https://example.com/log.7z"
-        disabled={$loading}
-      />
-      <button
-        class="btn primary"
-        onclick={() => loadUrl(logUrl)}
-        disabled={$loading || !logUrl}>Load</button
-      >
-    </div>
-  </section>
-
-  {#if $errorMsg}
-    <div class="error">{$errorMsg}</div>
-  {/if}
   {/if}
 
   <!-- Timeline (file mode) -->
@@ -381,8 +421,8 @@
             <button
               class="btn speed"
               class:active={playSpeed === s}
-              onclick={() => setSpeed(s)}
-            >{s}x</button>
+              onclick={() => setSpeed(s)}>{s}x</button
+            >
           {/each}
         </div>
       </div>
@@ -391,11 +431,15 @@
 
   <!-- Live step counter (WS mode) -->
   {#if $mode === "ws" && $currentStep > 0}
-    {@const wsMaxStep = $kernelConfig["kernel.timesteps"] ? Number($kernelConfig["kernel.timesteps"]) : null}
+    {@const wsMaxStep = $kernelConfig["kernel.timesteps"]
+      ? Number($kernelConfig["kernel.timesteps"])
+      : null}
     <section class="timeline">
       <div class="timeline-header">
         <span class="section-label">Step</span>
-        <span class="step-counter">{$currentStep}{wsMaxStep ? ` / ${wsMaxStep}` : ""}</span>
+        <span class="step-counter"
+          >{$currentStep}{wsMaxStep ? ` / ${wsMaxStep}` : ""}</span
+        >
       </div>
     </section>
   {/if}
@@ -403,23 +447,27 @@
   {#if $mode !== "idle" && $maxStep > 0}
     <div class="btn-row">
       {#if Object.keys($kernelConfig).length > 0}
-        <button class="btn follow icon-btn" onclick={() => (showConfig = true)} title="Kernel Config">⚙️</button>
+        <button
+          class="btn follow icon-btn"
+          onclick={() => (showConfig = true)}
+          title="Kernel Config">⚙️</button
+        >
       {/if}
       <button
         class="btn follow"
         class:active={$followMode}
         onclick={() => followMode.update((v) => !v)}
-        title="選択中のエージェントに追従"
-        >Follow</button
+        title="選択中のエージェントに追従">Follow</button
       >
       {#if $mode === "file"}
         <button
           class="btn follow"
           class:active={$perceptionViewMode}
-          disabled={$pinnedAgentId === null && !isAgent($selectedEntity?.urn ?? 0) && !isCommandCenter($selectedEntity?.urn ?? 0)}
+          disabled={$pinnedAgentId === null &&
+            !isAgent($selectedEntity?.urn ?? 0) &&
+            !isCommandCenter($selectedEntity?.urn ?? 0)}
           onclick={() => perceptionViewMode.update((v) => !v)}
-          title="選択エージェントの知覚世界を表示"
-          >Perception</button
+          title="選択エージェントの知覚世界を表示">Perception</button
         >
       {/if}
     </div>

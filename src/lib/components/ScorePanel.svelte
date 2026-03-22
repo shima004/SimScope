@@ -35,12 +35,15 @@
   });
 
   const agentCounts = $derived.by(() => {
-    let fb = 0, at = 0, pf = 0, cv = 0;
+    let fb = 0,
+      at = 0,
+      pf = 0,
+      cv = 0;
     for (const e of $entities.values()) {
-      if (e.urn === EntityURN.FIRE_BRIGADE)    fb++;
+      if (e.urn === EntityURN.FIRE_BRIGADE) fb++;
       else if (e.urn === EntityURN.AMBULANCE_TEAM) at++;
-      else if (e.urn === EntityURN.POLICE_FORCE)   pf++;
-      else if (e.urn === EntityURN.CIVILIAN)        cv++;
+      else if (e.urn === EntityURN.POLICE_FORCE) pf++;
+      else if (e.urn === EntityURN.CIVILIAN) cv++;
     }
     return { fb, at, pf, cv };
   });
@@ -100,7 +103,9 @@
       <div class="divider"></div>
       <div class="agent-counts">
         <span class="agent-item" title="Fire Brigade">🚒 {agentCounts.fb}</span>
-        <span class="agent-item" title="Ambulance Team">🚑 {agentCounts.at}</span>
+        <span class="agent-item" title="Ambulance Team"
+          >🚑 {agentCounts.at}</span
+        >
         <span class="agent-item" title="Police Force">🚜 {agentCounts.pf}</span>
         <span class="agent-item" title="Civilian">🧍 {agentCounts.cv}</span>
       </div>

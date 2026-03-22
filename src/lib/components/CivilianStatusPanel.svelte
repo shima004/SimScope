@@ -29,9 +29,7 @@
     return [...seen.values()];
   }
 
-  function calcCarried(
-    map: Map<number, SimEntity>,
-  ): CarryPair[] {
+  function calcCarried(map: Map<number, SimEntity>): CarryPair[] {
     const result: CarryPair[] = [];
     for (const e of map.values()) {
       if (e.urn === EntityURN.CIVILIAN) {
@@ -44,10 +42,7 @@
     return result;
   }
 
-  function calcBuried(
-    map: Map<number, SimEntity>,
-    rescuedIds: Set<number>,
-  ) {
+  function calcBuried(map: Map<number, SimEntity>, rescuedIds: Set<number>) {
     const result: HumanEntity[] = [];
     for (const e of map.values()) {
       if (!isAgent(e.urn)) continue;
@@ -147,7 +142,13 @@
 
 {#if hasAny}
   <div class="panel" class:dual={!!mergedCarried}>
-    <div class="panel-header" role="button" tabindex="0" onclick={() => (collapsed = !collapsed)} onkeydown={(e) => e.key === 'Enter' && (collapsed = !collapsed)}>
+    <div
+      class="panel-header"
+      role="button"
+      tabindex="0"
+      onclick={() => (collapsed = !collapsed)}
+      onkeydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
+    >
       <span class="panel-label">Civilian Status</span>
       {#if mergedCarried && !collapsed}
         <span class="ch-col perceived">👁 Perceived</span>
@@ -157,213 +158,228 @@
     </div>
 
     {#if !collapsed}
-    {#if mergedCarried}
-      <!-- ── dual column header ── -->
-      <div class="col-header">
-        <span class="ch-id"></span>
-        <span class="ch-col perceived">👁 Perceived</span>
-        <span class="ch-col actual">Actual</span>
-      </div>
+      {#if mergedCarried}
+        <!-- ── dual column header ── -->
+        <div class="col-header">
+          <span class="ch-id"></span>
+          <span class="ch-col perceived">👁 Perceived</span>
+          <span class="ch-col actual">Actual</span>
+        </div>
 
-      <!-- Carrying -->
-      {#if mergedCarried.length > 0}
-        <div class="section-label">Carrying ({mergedCarried.length})</div>
-        {#each mergedCarried as row (row.id)}
-          {@const rep = row.p?.civilian ?? row.a!.civilian}
-          <button
-            class="dual-row"
-            onclick={() => focusOn(row.p?.carrier ?? row.a!.carrier)}
-            class:selected={$selectedId === row.id}
-          >
-            <span class="cid" style="color:{entityColor(rep.urn)}"
-              >#{row.id}</span
+        <!-- Carrying -->
+        {#if mergedCarried.length > 0}
+          <div class="section-label">Carrying ({mergedCarried.length})</div>
+          {#each mergedCarried as row (row.id)}
+            {@const rep = row.p?.civilian ?? row.a!.civilian}
+            <button
+              class="dual-row"
+              onclick={() => focusOn(row.p?.carrier ?? row.a!.carrier)}
+              class:selected={$selectedId === row.id}
             >
-            <span class="dual-cell">
-              {#if row.p}
-                <span class="bar-wrap"
-                  ><span
-                    class="bar hp"
-                    style="width:{Math.min(100, row.p.civilian.hp / 100)}%"
-                  ></span></span
-                >
-                <span class="num">{row.p.civilian.hp.toLocaleString()}</span>
-                {#if row.p.civilian.damage > 0}<span class="badge dmg"
-                    >D:{row.p.civilian.damage}</span
-                  >{/if}
-              {/if}
-            </span>
-            <span class="dual-cell">
-              {#if row.a}
-                <span class="bar-wrap"
-                  ><span
-                    class="bar hp"
-                    style="width:{Math.min(100, row.a.civilian.hp / 100)}%"
-                  ></span></span
-                >
-                <span class="num">{row.a.civilian.hp.toLocaleString()}</span>
-                {#if row.a.civilian.damage > 0}<span class="badge dmg"
-                    >D:{row.a.civilian.damage}</span
-                  >{/if}
-              {/if}
-            </span>
-          </button>
-        {/each}
-      {/if}
-
-      <!-- Rescuing -->
-      {#if mergedRescued && mergedRescued.length > 0}
-        <div class="section-label">Rescuing ({mergedRescued.length})</div>
-        {#each mergedRescued as row (row.id)}
-          {@const rep = row.p ?? row.a!}
-          <button
-            class="dual-row"
-            onclick={() => focusOn(rep)}
-            class:selected={$selectedId === row.id}
-          >
-            <span class="cid" style="color:{entityColor(rep.urn)}"
-              >#{row.id}</span
-            >
-            <span class="dual-cell">
-              {#if row.p}
-                <span class="bar-wrap"
-                  ><span
-                    class="bar hp"
-                    style="width:{Math.min(100, row.p.hp / 100)}%"
-                  ></span></span
-                >
-                <span class="num">{row.p.hp.toLocaleString()}</span>
-                {#if row.p.buriedness > 0}<span class="badge bury"
-                    >B:{row.p.buriedness}</span
-                  >{/if}
-              {/if}
-            </span>
-            <span class="dual-cell">
-              {#if row.a}
-                <span class="bar-wrap"
-                  ><span
-                    class="bar hp"
-                    style="width:{Math.min(100, row.a.hp / 100)}%"
-                  ></span></span
-                >
-                <span class="num">{row.a.hp.toLocaleString()}</span>
-                {#if row.a.buriedness > 0}<span class="badge bury"
-                    >B:{row.a.buriedness}</span
-                  >{/if}
-              {/if}
-            </span>
-          </button>
-        {/each}
-      {/if}
-
-      <!-- Buried -->
-      {#if mergedBuried && mergedBuried.length > 0}
-        <div class="section-label">Buried ({mergedBuried.length})</div>
-        {#each mergedBuried as row (row.id)}
-          {@const rep = row.p ?? row.a!}
-          <button
-            class="dual-row"
-            onclick={() => focusOn(rep)}
-            class:selected={$selectedId === row.id}
-          >
-            <span class="cid" style="color:{entityColor(rep.urn)}"
-              >#{row.id}</span
-            >
-            <span class="dual-cell">
-              {#if row.p}
-                <span class="bar-wrap"
-                  ><span
-                    class="bar hp"
-                    style="width:{Math.min(100, row.p.hp / 100)}%"
-                  ></span></span
-                >
-                <span class="num">{row.p.hp.toLocaleString()}</span>
-                <span class="badge bury">B:{row.p.buriedness}</span>
-              {/if}
-            </span>
-            <span class="dual-cell">
-              {#if row.a}
-                <span class="bar-wrap"
-                  ><span
-                    class="bar hp"
-                    style="width:{Math.min(100, row.a.hp / 100)}%"
-                  ></span></span
-                >
-                <span class="num">{row.a.hp.toLocaleString()}</span>
-                <span class="badge bury">B:{row.a.buriedness}</span>
-              {/if}
-            </span>
-          </button>
-        {/each}
-      {/if}
-    {:else}
-      <!-- ── single column (normal mode) ── -->
-      {#if carriedActual.length > 0}
-        <div class="section-label">Carrying ({carriedActual.length})</div>
-        {#each carriedActual as { civilian: c, carrier } (c.id)}
-          <button
-            class="row"
-            onclick={() => focusOn(carrier)}
-            class:selected={$selectedId === c.id}
-          >
-            <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
-            <span class="stat">
-              <span class="bar-wrap"
-                ><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"
-                ></span></span
+              <span class="cid" style="color:{entityColor(rep.urn)}"
+                >#{row.id}</span
               >
-              <span class="num">{c.hp.toLocaleString()}</span>
-            </span>
-            <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ""}</span>
-          </button>
-        {/each}
-      {/if}
+              <span class="dual-cell">
+                {#if row.p}
+                  <span class="bar-wrap"
+                    ><span
+                      class="bar hp"
+                      style="width:{Math.min(100, row.p.civilian.hp / 100)}%"
+                    ></span></span
+                  >
+                  <span class="num">{row.p.civilian.hp.toLocaleString()}</span>
+                  {#if row.p.civilian.damage > 0}<span class="badge dmg"
+                      >D:{row.p.civilian.damage}</span
+                    >{/if}
+                {/if}
+              </span>
+              <span class="dual-cell">
+                {#if row.a}
+                  <span class="bar-wrap"
+                    ><span
+                      class="bar hp"
+                      style="width:{Math.min(100, row.a.civilian.hp / 100)}%"
+                    ></span></span
+                  >
+                  <span class="num">{row.a.civilian.hp.toLocaleString()}</span>
+                  {#if row.a.civilian.damage > 0}<span class="badge dmg"
+                      >D:{row.a.civilian.damage}</span
+                    >{/if}
+                {/if}
+              </span>
+            </button>
+          {/each}
+        {/if}
 
-      {#if rescuedActual.length > 0}
-        <div class="section-label">Rescuing ({rescuedActual.length})</div>
-        {#each rescuedActual as c (c.id)}
-          <button
-            class="row"
-            onclick={() => focusOn(c)}
-            class:selected={$selectedId === c.id}
-          >
-            <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
-            <span class="stat">
-              <span class="bar-wrap"
-                ><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"
-                ></span></span
-              >
-              <span class="num">{c.hp.toLocaleString()}</span>
-            </span>
-            <span class="badge bury"
-              >{c.buriedness > 0 ? `B:${c.buriedness}` : ""}</span
+        <!-- Rescuing -->
+        {#if mergedRescued && mergedRescued.length > 0}
+          <div class="section-label">Rescuing ({mergedRescued.length})</div>
+          {#each mergedRescued as row (row.id)}
+            {@const rep = row.p ?? row.a!}
+            <button
+              class="dual-row"
+              onclick={() => focusOn(rep)}
+              class:selected={$selectedId === row.id}
             >
-            <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ""}</span>
-          </button>
-        {/each}
-      {/if}
-
-      {#if buriedActual.length > 0}
-        <div class="section-label">Buried ({buriedActual.length})</div>
-        {#each buriedActual as c (c.id)}
-          <button
-            class="row"
-            onclick={() => focusOn(c)}
-            class:selected={$selectedId === c.id}
-          >
-            <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span>
-            <span class="stat">
-              <span class="bar-wrap"
-                ><span class="bar hp" style="width:{Math.min(100, c.hp / 100)}%"
-                ></span></span
+              <span class="cid" style="color:{entityColor(rep.urn)}"
+                >#{row.id}</span
               >
-              <span class="num">{c.hp.toLocaleString()}</span>
-            </span>
-            <span class="badge bury">B:{c.buriedness}</span>
-            <span class="badge dmg">{c.damage > 0 ? `D:${c.damage}` : ""}</span>
-          </button>
-        {/each}
+              <span class="dual-cell">
+                {#if row.p}
+                  <span class="bar-wrap"
+                    ><span
+                      class="bar hp"
+                      style="width:{Math.min(100, row.p.hp / 100)}%"
+                    ></span></span
+                  >
+                  <span class="num">{row.p.hp.toLocaleString()}</span>
+                  {#if row.p.buriedness > 0}<span class="badge bury"
+                      >B:{row.p.buriedness}</span
+                    >{/if}
+                {/if}
+              </span>
+              <span class="dual-cell">
+                {#if row.a}
+                  <span class="bar-wrap"
+                    ><span
+                      class="bar hp"
+                      style="width:{Math.min(100, row.a.hp / 100)}%"
+                    ></span></span
+                  >
+                  <span class="num">{row.a.hp.toLocaleString()}</span>
+                  {#if row.a.buriedness > 0}<span class="badge bury"
+                      >B:{row.a.buriedness}</span
+                    >{/if}
+                {/if}
+              </span>
+            </button>
+          {/each}
+        {/if}
+
+        <!-- Buried -->
+        {#if mergedBuried && mergedBuried.length > 0}
+          <div class="section-label">Buried ({mergedBuried.length})</div>
+          {#each mergedBuried as row (row.id)}
+            {@const rep = row.p ?? row.a!}
+            <button
+              class="dual-row"
+              onclick={() => focusOn(rep)}
+              class:selected={$selectedId === row.id}
+            >
+              <span class="cid" style="color:{entityColor(rep.urn)}"
+                >#{row.id}</span
+              >
+              <span class="dual-cell">
+                {#if row.p}
+                  <span class="bar-wrap"
+                    ><span
+                      class="bar hp"
+                      style="width:{Math.min(100, row.p.hp / 100)}%"
+                    ></span></span
+                  >
+                  <span class="num">{row.p.hp.toLocaleString()}</span>
+                  <span class="badge bury">B:{row.p.buriedness}</span>
+                {/if}
+              </span>
+              <span class="dual-cell">
+                {#if row.a}
+                  <span class="bar-wrap"
+                    ><span
+                      class="bar hp"
+                      style="width:{Math.min(100, row.a.hp / 100)}%"
+                    ></span></span
+                  >
+                  <span class="num">{row.a.hp.toLocaleString()}</span>
+                  <span class="badge bury">B:{row.a.buriedness}</span>
+                {/if}
+              </span>
+            </button>
+          {/each}
+        {/if}
+      {:else}
+        <!-- ── single column (normal mode) ── -->
+        {#if carriedActual.length > 0}
+          <div class="section-label">Carrying ({carriedActual.length})</div>
+          {#each carriedActual as { civilian: c, carrier } (c.id)}
+            <button
+              class="row"
+              onclick={() => focusOn(carrier)}
+              class:selected={$selectedId === c.id}
+            >
+              <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span
+              >
+              <span class="stat">
+                <span class="bar-wrap"
+                  ><span
+                    class="bar hp"
+                    style="width:{Math.min(100, c.hp / 100)}%"
+                  ></span></span
+                >
+                <span class="num">{c.hp.toLocaleString()}</span>
+              </span>
+              <span class="badge dmg"
+                >{c.damage > 0 ? `D:${c.damage}` : ""}</span
+              >
+            </button>
+          {/each}
+        {/if}
+
+        {#if rescuedActual.length > 0}
+          <div class="section-label">Rescuing ({rescuedActual.length})</div>
+          {#each rescuedActual as c (c.id)}
+            <button
+              class="row"
+              onclick={() => focusOn(c)}
+              class:selected={$selectedId === c.id}
+            >
+              <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span
+              >
+              <span class="stat">
+                <span class="bar-wrap"
+                  ><span
+                    class="bar hp"
+                    style="width:{Math.min(100, c.hp / 100)}%"
+                  ></span></span
+                >
+                <span class="num">{c.hp.toLocaleString()}</span>
+              </span>
+              <span class="badge bury"
+                >{c.buriedness > 0 ? `B:${c.buriedness}` : ""}</span
+              >
+              <span class="badge dmg"
+                >{c.damage > 0 ? `D:${c.damage}` : ""}</span
+              >
+            </button>
+          {/each}
+        {/if}
+
+        {#if buriedActual.length > 0}
+          <div class="section-label">Buried ({buriedActual.length})</div>
+          {#each buriedActual as c (c.id)}
+            <button
+              class="row"
+              onclick={() => focusOn(c)}
+              class:selected={$selectedId === c.id}
+            >
+              <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span
+              >
+              <span class="stat">
+                <span class="bar-wrap"
+                  ><span
+                    class="bar hp"
+                    style="width:{Math.min(100, c.hp / 100)}%"
+                  ></span></span
+                >
+                <span class="num">{c.hp.toLocaleString()}</span>
+              </span>
+              <span class="badge bury">B:{c.buriedness}</span>
+              <span class="badge dmg"
+                >{c.damage > 0 ? `D:${c.damage}` : ""}</span
+              >
+            </button>
+          {/each}
+        {/if}
       {/if}
-    {/if}
     {/if}
   </div>
 {/if}
