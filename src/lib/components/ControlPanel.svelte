@@ -116,6 +116,10 @@
       playInterval = null;
       playing = false;
     }
+    // 再生開始時にConnectionを折りたたむ
+    if ($mode !== "idle") {
+      inputsCollapsed = true;
+    }
   });
 </script>
 
