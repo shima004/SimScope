@@ -30,7 +30,7 @@
   const wsUrl = $derived(
     `ws://${typeof window !== "undefined" ? window.location.host : "localhost:5173"}/proxy?host=${tcpHost}&port=${tcpPort}`,
   );
-  let fileInput: HTMLInputElement;
+  let fileInput = $state<HTMLInputElement>();
   let logUrl = $state(_q.get("url") ?? "");
 
   onMount(async () => {
@@ -165,7 +165,7 @@
     <div class="row">
       <button
         class="btn primary"
-        onclick={() => fileInput.click()}
+        onclick={() => fileInput?.click()}
         disabled={$loading}
       >
         {$loading ? "Loading…" : "Open 7z tgz tar.gz log file"}

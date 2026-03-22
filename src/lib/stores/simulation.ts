@@ -597,7 +597,7 @@ function handleLogFrame(frame: LogProtoMsg) {
     if (speakMap.size > 0) speakTimeline.set(time, speakMap);
 
     // AK_SPEAK をエージェント別にステップ単位で保存
-    const agentCommMap = new Map<number, { speak: number }>();
+    const agentCommMap = new Map<number, { speak: number; bytes: number }>();
     // AK_SUBSCRIBE のチャンネルリストをエージェント別に保存
     const agentSubMap = new Map<number, number[]>();
     for (const cmd of cmds) {
