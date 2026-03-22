@@ -72,6 +72,8 @@ let speakTimeline: Map<
   number,
   Map<number, { count: number; bytes: number }>
 > = new Map();
+let agentCommTimeline: Map<number, Map<number, { speak: number }>> = new Map();
+let agentSubscribeTimeline: Map<number, Map<number, number[]>> = new Map();
 
 export interface CommMessage {
   senderId: number;
@@ -103,6 +105,10 @@ export const currentSpeakStats = writable<
 >(new Map());
 /** 通信可視化で非表示にするチャンネル番号のセット */
 export const hiddenChannels = writable<Set<number>>(new Set());
+/** agentId → AK_SPEAK件数 (current step) */
+export const agentCommStats = writable<Map<number, { speak: number }>>(new Map());
+/** agentId → サブスクライブ中のチャンネル番号[] (現ステップまでの最新 AK_SUBSCRIBE) */
+export const agentSubscriptions = writable<Map<number, number[]>>(new Map());
 /** 初期ステップの瓦礫 repairCost 合計（除去率計算用） */
 export const initialBlockadeCost = writable(0);
 
@@ -490,6 +496,14 @@ export function seekToStep(step: number) {
   rebuildState(step);
   currentStep.set(step);
   currentSpeakStats.set(speakTimeline.get(step) ?? new Map());
+  agentCommStats.set(agentCommTimeline.get(step) ?? new Map());
+  // 現ステップまでの最新 AK_SUBSCRIBE を集約
+  const subs = new Map<number, number[]>();
+  for (let s = 1; s <= step; s++) {
+    const m = agentSubscribeTimeline.get(s);
+    if (m) for (const [id, chs] of m) subs.set(id, chs);
+  }
+  agentSubscriptions.set(subs);
   updatePerceptionState(step, get(selectedId));
 }
 
@@ -567,6 +581,24 @@ function handleLogFrame(frame: LogProtoMsg) {
       });
     }
     if (speakMap.size > 0) speakTimeline.set(time, speakMap);
+
+    // AK_SPEAK をエージェント別にステップ単位で保存
+    const agentCommMap = new Map<number, { speak: number }>();
+    // AK_SUBSCRIBE のチャンネルリストをエージェント別に保存
+    const agentSubMap = new Map<number, number[]>();
+    for (const cmd of cmds) {
+      const agentId = cmd.components[ComponentControlMsgURN.AgentID]?.entityID;
+      if (agentId === undefined) continue;
+      if (cmd.urn === CommandURN.AK_SPEAK) {
+        const cur = agentCommMap.get(agentId) ?? { speak: 0 };
+        agentCommMap.set(agentId, { speak: cur.speak + 1 });
+      } else if (cmd.urn === CommandURN.AK_SUBSCRIBE) {
+        const channels = cmd.components[ComponentCommandURN.Channels]?.intList?.values ?? [];
+        agentSubMap.set(agentId, channels);
+      }
+    }
+    if (agentCommMap.size > 0) agentCommTimeline.set(time, agentCommMap);
+    if (agentSubMap.size > 0) agentSubscribeTimeline.set(time, agentSubMap);
   }
 
   if (frame.perception) {
@@ -639,6 +671,10 @@ function reset() {
   perceptionChangesTimeline = new Map();
   commTimeline = new Map();
   speakTimeline = new Map();
+  agentCommTimeline = new Map();
+  agentSubscribeTimeline = new Map();
+  agentCommStats.set(new Map());
+  agentSubscriptions.set(new Map());
   entities.set(new Map());
   currentStep.set(0);
   maxStep.set(0);
@@ -646,6 +682,7 @@ function reset() {
   initialBlockadeCost.set(0);
   kernelConfig.set({});
   agentActions.set(new Map());
+  agentCommStats.set(new Map());
   agentVisibleIds.set(null);
   agentReceivedComms.set(null);
   perceptionViewMode.set(false);

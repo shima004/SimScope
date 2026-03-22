@@ -9,6 +9,7 @@
     RefugeEntity,
   } from "$lib/rcrs/types";
   import {
+    CommandURNLabel,
     EntityURN,
     EntityURNLabel,
     FIERYNESS_LABEL,
@@ -17,7 +18,10 @@
     isCommandCenter,
   } from "$lib/rcrs/urns";
   import {
+    agentActions,
+    agentCommStats,
     agentReceivedComms,
+    agentSubscriptions,
     entities,
     inspectedEntity,
     inspectedId,
@@ -50,7 +54,10 @@
   );
 </script>
 
-{#snippet entityProps(e: AreaEntity | BlockadeEntity | HumanEntity | null, isPinned: boolean)}
+{#snippet entityProps(
+  e: AreaEntity | BlockadeEntity | HumanEntity | null,
+  isPinned: boolean,
+)}
   <div class="props">
     {#if e}
       <!-- Position -->
@@ -96,6 +103,31 @@
       <!-- Agent-specific -->
       {#if "hp" in e}
         {@const h = e as HumanEntity}
+        {@const action = $agentActions.get(e.id)}
+        {#if action}
+          <div class="row">
+            <span class="key">Action</span>
+            <span class="val action-label"
+              >{CommandURNLabel[action.urn] ??
+                `0x${action.urn.toString(16)}`}</span
+            >
+          </div>
+        {/if}
+        {@const commStat = $agentCommStats.get(e.id)}
+        {#if commStat && commStat.speak > 0}
+          <div class="row">
+            <span class="key">Speak</span>
+            <span class="val">{commStat.speak}<span class="unit"> msg</span></span>
+          </div>
+        {/if}
+        {@const subChannels = [
+          ...new Set([0, ...($agentSubscriptions.get(e.id) ?? [])]),
+        ].sort((a, b) => a - b)}
+        <div class="row">
+          <span class="key">Subscribe</span>
+          <span class="val">{subChannels.map((c) => `ch.${c}`).join(", ")}</span
+          >
+        </div>
         <div class="row">
           <span class="key">HP</span>
           <span class="val">
@@ -455,6 +487,17 @@
     background: #c84040;
     border-radius: 2px;
   }
+  .unit {
+    font-size: 10px;
+    color: #607080;
+    font-weight: 400;
+  }
+
+  .action-label {
+    color: #ffc840;
+    font-weight: 600;
+  }
+
   .bar.hp {
     background: #40c870;
   }
