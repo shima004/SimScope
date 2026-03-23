@@ -209,7 +209,9 @@
       rafId = null;
     }
     nextSnapshot = null;
-    agentActions.set(getCommandsAtStep($currentStep));
+    if (get(mode) === "file") {
+      agentActions.set(getCommandsAtStep(get(currentStep)));
+    }
   }
   let showConfig = $state(false);
   let openGroups = $state<Set<string>>(new Set());

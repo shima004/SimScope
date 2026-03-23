@@ -305,9 +305,11 @@ export function connectWS(url: string) {
           if (entity) map.set(entity.id, entity);
         }
         entities.set(map);
+        animatedEntities.set(map);
         maxStep.set(msg.maxStep);
         kernelConfig.set(msg.config ?? {});
       } else if (msg.type === "TIMESTEP") {
+        let nextMap: Map<number, SimEntity> | null = null;
         entities.update((map) => {
           const next = applyChanges(map, msg.changes as ChangeSetProto);
           if (msg.time === 1) {
@@ -318,25 +320,56 @@ export function connectWS(url: string) {
             }
             initialBlockadeCost.set(totalCost);
           }
+          nextMap = next;
           return next;
         });
+        if (nextMap) animatedEntities.set(nextMap);
         currentStep.set(msg.time);
         if (Array.isArray(msg.commands)) {
-          const actions = new Map<number, AgentAction>();
+          const actionMap = new Map<number, AgentAction>();
+          const commMap = new Map<number, { speak: number; bytes: number }>();
+          const speakMap = new Map<number, { count: number; bytes: number }>();
+          const subMap = new Map<number, number[]>();
           for (const c of msg.commands as {
             agentId: number;
             urn: number;
             target?: number;
             destX?: number;
             destY?: number;
+            channel?: number;
+            messageBytes?: number;
+            channels?: number[];
           }[]) {
-            const action: AgentAction = { urn: c.urn };
-            if (c.target !== undefined) action.target = c.target;
-            if (c.destX !== undefined) action.destX = c.destX;
-            if (c.destY !== undefined) action.destY = c.destY;
-            actions.set(c.agentId, action);
+            const { agentId, urn, target, destX, destY, channel, messageBytes, channels } = c;
+            if (urn === CommandURN.AK_SPEAK) {
+              const cur = commMap.get(agentId) ?? { speak: 0, bytes: 0 };
+              commMap.set(agentId, { speak: cur.speak + 1, bytes: cur.bytes + (messageBytes ?? 0) });
+              if (channel !== undefined) {
+                const cs = speakMap.get(channel) ?? { count: 0, bytes: 0 };
+                speakMap.set(channel, { count: cs.count + 1, bytes: cs.bytes + (messageBytes ?? 0) });
+              }
+              continue;
+            }
+            if (urn === CommandURN.AK_SAY || urn === CommandURN.AK_TELL) continue;
+            if (urn === CommandURN.AK_SUBSCRIBE) {
+              if (channels && channels.length > 0) subMap.set(agentId, channels);
+              continue;
+            }
+            const action: AgentAction = { urn };
+            if (target !== undefined) action.target = target;
+            if (destX !== undefined) action.destX = destX;
+            if (destY !== undefined) action.destY = destY;
+            actionMap.set(agentId, action);
           }
-          agentActions.set(actions);
+          agentActions.set(actionMap);
+          agentCommStats.set(commMap);
+          currentSpeakStats.set(speakMap);
+          if (subMap.size > 0) {
+            agentSubscriptions.update((existing) => {
+              for (const [id, chs] of subMap) existing.set(id, chs);
+              return existing;
+            });
+          }
         }
       } else if (msg.type === "ERROR") {
         errorMsg.set(`Kernel error: ${msg.reason}`);

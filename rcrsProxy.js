@@ -161,17 +161,23 @@ export function handleRcrsViewer(ws, tcpHost, tcpPort) {
       const commandListMsg = comps[URN.Commands]?.commandList;
       const commands = [];
       if (commandListMsg) {
-        const cmdList = MessageListProtoType.toObject(commandListMsg, TOOBJ_OPTS);
-        for (const cmd of (cmdList.commands ?? [])) {
-          const agentId = cmd.components?.[URN.AgentID]?.entityID ?? 0;
+        for (const cmd of (commandListMsg.commands ?? [])) {
+          const agentId = cmd.components?.[URN.AgentID]?.entityID
+                       || cmd.components?.[URN.AgentID]?.intValue;
           if (!agentId) continue;
           const entry = { urn: cmd.urn, agentId };
-          const target = cmd.components?.[0x1401]?.entityID;
-          const destX  = cmd.components?.[0x1402]?.intValue;
-          const destY  = cmd.components?.[0x1403]?.intValue;
-          if (target !== undefined) entry.target = target;
-          if (destX  !== undefined) entry.destX  = destX;
-          if (destY  !== undefined) entry.destY  = destY;
+          const target   = cmd.components?.[0x1401]?.entityID;
+          const destX    = cmd.components?.[0x1402]?.intValue;
+          const destY    = cmd.components?.[0x1403]?.intValue;
+          const channel  = cmd.components?.[0x1407]?.intValue;   // AK_SPEAK channel
+          const msgLen   = cmd.components?.[0x1406]?.rawData?.length ?? 0; // message bytes
+          const channels = cmd.components?.[0x1408]?.intList?.values ?? []; // AK_SUBSCRIBE
+          if (target   != null) entry.target   = target;
+          if (destX    != null) entry.destX    = destX;
+          if (destY    != null) entry.destY    = destY;
+          if (channel  != null) entry.channel  = channel;
+          if (msgLen    > 0   ) entry.messageBytes = msgLen;
+          if (channels.length > 0) entry.channels = channels;
           commands.push(entry);
         }
       }
