@@ -6,6 +6,16 @@ export const GET: RequestHandler = async ({ url }) => {
     return new Response("Missing url parameter", { status: 400 });
   }
 
+  let parsed: URL;
+  try {
+    parsed = new URL(target);
+  } catch {
+    return new Response("Invalid url", { status: 400 });
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return new Response("Only http/https URLs are allowed", { status: 400 });
+  }
+
   try {
     const upstream = await fetch(target);
     if (!upstream.ok) {
