@@ -159,13 +159,6 @@
 
     {#if !collapsed}
       {#if mergedCarried}
-        <!-- ── dual column header ── -->
-        <div class="col-header">
-          <span class="ch-id"></span>
-          <span class="ch-col perceived">👁 Perceived</span>
-          <span class="ch-col actual">Actual</span>
-        </div>
-
         <!-- Carrying -->
         {#if mergedCarried.length > 0}
           <div class="section-label">Carrying ({mergedCarried.length})</div>
@@ -442,21 +435,14 @@
     color: #c8d8e8;
   }
 
-  .col-header {
-    display: grid;
-    grid-template-columns: 72px 1fr 1fr;
-    gap: 4px;
-    padding: 4px 10px 4px;
-    border-bottom: 1px solid rgba(0, 200, 255, 0.1);
-    margin-bottom: 2px;
-  }
-
   .ch-col {
     font-size: 9px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    width: 110px;
     text-align: center;
+    flex-shrink: 0;
   }
   .ch-col.perceived {
     color: #ffc840;
