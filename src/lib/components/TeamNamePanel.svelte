@@ -21,6 +21,9 @@
     padding: 6px 12px;
     font-family: monospace;
     text-align: center;
+    max-width: 200px;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 
   .team {
