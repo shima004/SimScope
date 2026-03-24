@@ -283,17 +283,17 @@ let ws: WebSocket | null = null;
 export function connectWS(url: string) {
   if (ws) disconnectWS();
   errorMsg.set(null);
-  mode.set("ws");
 
   try {
     ws = new WebSocket(url);
   } catch (e) {
     errorMsg.set(`WebSocket error: ${e}`);
-    mode.set("idle");
     return;
   }
 
-  ws.onopen = () => connected.set(true);
+  ws.onopen = () => {
+    connected.set(true);
+  };
 
   ws.onmessage = ({ data }: MessageEvent<string>) => {
     try {
@@ -308,6 +308,7 @@ export function connectWS(url: string) {
         animatedEntities.set(map);
         maxStep.set(msg.maxStep);
         kernelConfig.set(msg.config ?? {});
+        mode.set("ws");
       } else if (msg.type === "TIMESTEP") {
         let nextMap: Map<number, SimEntity> | null = null;
         entities.update((map) => {
@@ -382,11 +383,14 @@ export function connectWS(url: string) {
   ws.onerror = () => errorMsg.set("WebSocket connection error");
 
   ws.onclose = () => {
+    const wasConnected = get(mode) === "ws";
     connected.set(false);
-    // Auto-reconnect after 3 s
-    setTimeout(() => {
-      if (get(mode) === "ws") connectWS(url);
-    }, 3000);
+    mode.set("idle");
+    if (!wasConnected) {
+      errorMsg.set("Connection failed");
+    } else {
+      errorMsg.set("Disconnected from server");
+    }
   };
 }
 

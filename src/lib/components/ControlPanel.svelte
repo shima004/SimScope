@@ -322,7 +322,7 @@
           placeholder="port"
           disabled={$mode === "ws"}
         />
-        {#if $mode === "ws"}
+        {#if $connected || $mode === "ws"}
           <button class="btn danger" onclick={disconnectWS}>Cut</button>
         {:else}
           <button
@@ -332,13 +332,13 @@
           >
         {/if}
       </div>
-      {#if $mode === "ws"}
+      {#if $connected || $mode === "ws"}
         <div
           class="status"
-          class:online={$connected}
-          class:offline={!$connected}
+          class:online={$mode === "ws"}
+          class:offline={$mode !== "ws"}
         >
-          {$connected ? "● Connected" : "○ Reconnecting…"}
+          {$mode === "ws" ? "● Connected" : "○ Connecting…"}
         </div>
       {/if}
     </section>
