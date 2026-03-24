@@ -1,5 +1,7 @@
 # SimScope
 
+[English](README.en.md) | Japanese
+
 ![SimScope](https://github.com/user-attachments/assets/44532178-f40d-4d9c-bec3-4a4aa0079a61)
 
 RoboCup Rescue Simulation (RCRS) のビジュアライザです。カーネルにリアルタイム接続してシミュレーションを観察したり、ログファイルを再生したりできます。
