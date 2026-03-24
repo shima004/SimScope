@@ -4,7 +4,7 @@ English | [Japanese](README.md)
 
 ![SimScope](https://github.com/user-attachments/assets/44532178-f40d-4d9c-bec3-4a4aa0079a61)
 
-A visualizer for RoboCup Rescue Simulation (RCRS). You can connect to a running kernel in real time or replay log files.
+A visualizer for RoboCup Rescue Simulation (RRS). You can connect to a running kernel in real time or replay log files.
 
 ## Getting Started
 
