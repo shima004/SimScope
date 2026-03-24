@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { SimEntity } from "$lib/rcrs/types";
-  import { isAgent, isCommandCenter } from "$lib/rcrs/urns";
+  import { EntityURN, isAgent, isCommandCenter } from "$lib/rcrs/urns";
   import {
     agentActions,
     animatedEntities,
@@ -466,7 +466,8 @@
           class="btn follow"
           class:active={$perceptionViewMode}
           disabled={$pinnedAgentId === null &&
-            !isAgent($selectedEntity?.urn ?? 0) &&
+            (!isAgent($selectedEntity?.urn ?? 0) ||
+              $selectedEntity?.urn === EntityURN.CIVILIAN) &&
             !isCommandCenter($selectedEntity?.urn ?? 0)}
           onclick={() => perceptionViewMode.update((v) => !v)}
           title="選択エージェントの知覚世界を表示">Perception</button

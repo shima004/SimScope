@@ -480,6 +480,11 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
     const step = parseInt(parts[percIdx - 1], 10);
     const agentId = parseInt(parts[percIdx + 1], 10);
     if (isNaN(step) || isNaN(agentId)) continue;
+    // Civilian perception data is not used — skip to save memory
+    if (baseEntities.get(agentId)?.urn === EntityURN.CIVILIAN) {
+      files.delete(k);
+      continue;
+    }
     handleLogFrame(LogProtoCodec.decode(files.get(k)!));
     files.delete(k);
   }
