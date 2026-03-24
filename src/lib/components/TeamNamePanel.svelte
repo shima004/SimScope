@@ -21,7 +21,8 @@
     padding: 6px 12px;
     font-family: monospace;
     text-align: center;
-    max-width: 200px;
+    width: 240px;
+    box-sizing: border-box;
     word-break: break-word;
     overflow-wrap: break-word;
   }
