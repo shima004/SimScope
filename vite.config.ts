@@ -22,7 +22,12 @@ function rcrsProxyPlugin(): Plugin {
 				if (url.pathname !== '/proxy') return;
 
 				const tcpHost = url.searchParams.get('host') ?? 'localhost';
-				const tcpPort = parseInt(url.searchParams.get('port') ?? '7001');
+				const tcpPort = parseInt(url.searchParams.get('port') ?? '7001', 10);
+
+				if (!tcpPort || tcpPort < 1 || tcpPort > 65535) {
+					socket.destroy();
+					return;
+				}
 
 				wss.handleUpgrade(request, socket, head, (ws) => {
 					handleRcrsViewer(ws, tcpHost, tcpPort);

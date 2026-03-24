@@ -45,9 +45,13 @@ const URN = {
 const TOOBJ_OPTS = { defaults: true, longs: Number };
 
 function sendTcpMessage(tcp, msgBytes) {
-  const header = Buffer.alloc(4);
-  header.writeUInt32BE(msgBytes.length, 0);
-  tcp.write(Buffer.concat([header, msgBytes]));
+  try {
+    const header = Buffer.alloc(4);
+    header.writeUInt32BE(msgBytes.length, 0);
+    tcp.write(Buffer.concat([header, msgBytes]));
+  } catch (e) {
+    console.error("[proxy] tcp.write error:", e.message);
+  }
 }
 
 function buildVKConnect(requestID) {
@@ -86,7 +90,25 @@ function buildVKAcknowledge(requestID, viewerID) {
  * @param {number} tcpPort
  */
 export function handleRcrsViewer(ws, tcpHost, tcpPort) {
-  const tcp = net.createConnection({ host: tcpHost, port: tcpPort });
+  if (!tcpHost || typeof tcpHost !== "string" || tcpHost.length > 253) {
+    ws.close(1008, "Invalid host");
+    return;
+  }
+  const port = Number(tcpPort);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    console.error(`[proxy] Invalid port: ${tcpPort}`);
+    ws.close(1008, "Invalid port");
+    return;
+  }
+
+  let tcp;
+  try {
+    tcp = net.createConnection({ host: tcpHost, port });
+  } catch (e) {
+    console.error("[proxy] createConnection error:", e.message);
+    ws.close(1011, "Connection failed");
+    return;
+  }
   const requestID = Date.now() & 0x7fffffff;
   let buf = Buffer.alloc(0);
   let viewerID = 0;
@@ -97,13 +119,19 @@ export function handleRcrsViewer(ws, tcpHost, tcpPort) {
   });
 
   tcp.on("data", (chunk) => {
-    buf = Buffer.concat([buf, chunk]);
-    while (buf.length >= 4) {
-      const msgLen = buf.readUInt32BE(0);
-      if (buf.length < 4 + msgLen) break;
-      const msgBytes = buf.subarray(4, 4 + msgLen);
-      buf = buf.subarray(4 + msgLen);
-      handleMessage(msgBytes);
+    try {
+      buf = Buffer.concat([buf, chunk]);
+      while (buf.length >= 4) {
+        const msgLen = buf.readUInt32BE(0);
+        if (buf.length < 4 + msgLen) break;
+        const msgBytes = buf.subarray(4, 4 + msgLen);
+        buf = buf.subarray(4 + msgLen);
+        handleMessage(msgBytes);
+      }
+    } catch (e) {
+      console.error("[proxy] data handler error:", e.message);
+      tcp.destroy();
+      ws.close();
     }
   });
 
@@ -125,71 +153,117 @@ export function handleRcrsViewer(ws, tcpHost, tcpPort) {
       return;
     }
 
-    const { urn, components: comps } = msg;
+    try {
+      const { urn, components: comps } = msg;
+      if (!comps || typeof comps !== "object") return;
 
-    if (urn === URN.KV_CONNECT_OK) {
-      viewerID = comps[URN.ViewerID]?.intValue ?? 0;
-
-      const entityListMsg = comps[URN.Entities]?.entityList;
-      const entities = entityListMsg
-        ? (EntityListProtoType.toObject(entityListMsg, TOOBJ_OPTS).entities ??
-          [])
-        : [];
-
-      const configData = comps[URN.AgentConfig]?.config?.data ?? {};
-      const maxStep = parseInt(configData["kernel.timesteps"] ?? "300", 10);
-
-      sendTcpMessage(tcp, buildVKAcknowledge(requestID, viewerID));
-      console.log(
-        `[proxy] KVConnectOK: viewerID=${viewerID}, maxStep=${maxStep}, entities=${entities.length}`,
-      );
-
-      send({ type: "INITIAL", viewerID, maxStep, entities, config: configData });
-    } else if (urn === URN.KV_CONNECT_ERROR) {
-      const reason = comps[URN.RequestID]?.stringValue ?? "unknown";
-      console.error("[proxy] KVConnectError:", reason);
-      send({ type: "ERROR", reason });
-      ws.close();
-    } else if (urn === URN.KV_TIMESTEP) {
-      const time = comps[URN.Time]?.intValue ?? 0;
-      const changeSetMsg = (comps[URN.Updates] ?? comps[URN.Changes])
-        ?.changeSet;
-      const changes = changeSetMsg
-        ? ChangeSetProtoType.toObject(changeSetMsg, TOOBJ_OPTS)
-        : { changes: [], deletes: [] };
-
-      const commandListMsg = comps[URN.Commands]?.commandList;
-      const commands = [];
-      if (commandListMsg) {
-        for (const cmd of (commandListMsg.commands ?? [])) {
-          const agentId = cmd.components?.[URN.AgentID]?.entityID
-                       || cmd.components?.[URN.AgentID]?.intValue;
-          if (!agentId) continue;
-          const entry = { urn: cmd.urn, agentId };
-          const target   = cmd.components?.[0x1401]?.entityID;
-          const destX    = cmd.components?.[0x1402]?.intValue;
-          const destY    = cmd.components?.[0x1403]?.intValue;
-          const channel  = cmd.components?.[0x1407]?.intValue;   // AK_SPEAK channel
-          const msgLen   = cmd.components?.[0x1406]?.rawData?.length ?? 0; // message bytes
-          const channels = cmd.components?.[0x1408]?.intList?.values ?? []; // AK_SUBSCRIBE
-          if (target   != null) entry.target   = target;
-          if (destX    != null) entry.destX    = destX;
-          if (destY    != null) entry.destY    = destY;
-          if (channel  != null) entry.channel  = channel;
-          if (msgLen    > 0   ) entry.messageBytes = msgLen;
-          if (channels.length > 0) entry.channels = channels;
-          commands.push(entry);
-        }
+      if (urn === URN.KV_CONNECT_OK) {
+        handleConnectOK(comps);
+      } else if (urn === URN.KV_CONNECT_ERROR) {
+        handleConnectError(comps);
+      } else if (urn === URN.KV_TIMESTEP) {
+        handleTimestep(comps);
       }
-
-      console.log(
-        `[proxy] KVTimestep: time=${time}, changes=${changes.changes?.length ?? 0}, commands=${commands.length}`,
-      );
-      send({ type: "TIMESTEP", time, changes, commands });
+    } catch (e) {
+      console.error("[proxy] handleMessage error:", e.message);
     }
   }
 
+  function handleConnectOK(comps) {
+    viewerID = comps[URN.ViewerID]?.intValue ?? 0;
+
+    let entities = [];
+    try {
+      const entityListMsg = comps[URN.Entities]?.entityList;
+      if (entityListMsg) {
+        entities = EntityListProtoType.toObject(entityListMsg, TOOBJ_OPTS).entities ?? [];
+      }
+    } catch (e) {
+      console.error("[proxy] EntityList decode error:", e.message);
+    }
+
+    let configData = {};
+    try {
+      configData = comps[URN.AgentConfig]?.config?.data ?? {};
+    } catch (e) {
+      console.error("[proxy] AgentConfig decode error:", e.message);
+    }
+
+    const maxStep = parseInt(configData["kernel.timesteps"] ?? "300", 10) || 300;
+
+    sendTcpMessage(tcp, buildVKAcknowledge(requestID, viewerID));
+    console.log(
+      `[proxy] KVConnectOK: viewerID=${viewerID}, maxStep=${maxStep}, entities=${entities.length}`,
+    );
+
+    send({ type: "INITIAL", viewerID, maxStep, entities, config: configData });
+  }
+
+  function handleConnectError(comps) {
+    const reason = comps[URN.RequestID]?.stringValue ?? "unknown";
+    console.error("[proxy] KVConnectError:", reason);
+    send({ type: "ERROR", reason });
+    ws.close();
+  }
+
+  function handleTimestep(comps) {
+    const time = comps[URN.Time]?.intValue ?? 0;
+
+    let changes = { changes: [], deletes: [] };
+    try {
+      const changeSetMsg = (comps[URN.Updates] ?? comps[URN.Changes])?.changeSet;
+      if (changeSetMsg) {
+        changes = ChangeSetProtoType.toObject(changeSetMsg, TOOBJ_OPTS);
+        if (!Array.isArray(changes.changes)) changes.changes = [];
+        if (!Array.isArray(changes.deletes)) changes.deletes = [];
+      }
+    } catch (e) {
+      console.error("[proxy] ChangeSet decode error:", e.message);
+    }
+
+    const commands = [];
+    try {
+      const commandListMsg = comps[URN.Commands]?.commandList;
+      if (commandListMsg) {
+        const rawCmds = commandListMsg.commands;
+        if (Array.isArray(rawCmds)) {
+          for (const cmd of rawCmds) {
+            if (!cmd || typeof cmd !== "object") continue;
+            const agentId = cmd.components?.[URN.AgentID]?.entityID
+                         || cmd.components?.[URN.AgentID]?.intValue;
+            if (!agentId) continue;
+            const entry = { urn: cmd.urn, agentId };
+            const target   = cmd.components?.[0x1401]?.entityID;
+            const destX    = cmd.components?.[0x1402]?.intValue;
+            const destY    = cmd.components?.[0x1403]?.intValue;
+            const channel  = cmd.components?.[0x1407]?.intValue;
+            const msgLen   = cmd.components?.[0x1406]?.rawData?.length ?? 0;
+            const channels = cmd.components?.[0x1408]?.intList?.values ?? [];
+            if (target   != null) entry.target        = target;
+            if (destX    != null) entry.destX         = destX;
+            if (destY    != null) entry.destY         = destY;
+            if (channel  != null) entry.channel       = channel;
+            if (msgLen    > 0   ) entry.messageBytes  = msgLen;
+            if (Array.isArray(channels) && channels.length > 0) entry.channels = channels;
+            commands.push(entry);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[proxy] Commands decode error:", e.message);
+    }
+
+    console.log(
+      `[proxy] KVTimestep: time=${time}, changes=${changes.changes?.length ?? 0}, commands=${commands.length}`,
+    );
+    send({ type: "TIMESTEP", time, changes, commands });
+  }
+
   function send(obj) {
-    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
+    try {
+      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
+    } catch (e) {
+      console.error("[proxy] ws.send error:", e.message);
+    }
   }
 }
