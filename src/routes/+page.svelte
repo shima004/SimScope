@@ -7,7 +7,7 @@
   import ScorePanel from "$lib/components/ScorePanel.svelte";
   import SimMap from "$lib/components/SimMap.svelte";
   import TeamNamePanel from "$lib/components/TeamNamePanel.svelte";
-  import { loading } from "$lib/stores/simulation";
+  import { downloadProgress, loading } from "$lib/stores/simulation";
 
 </script>
 
@@ -27,7 +27,20 @@
     <div class="loading-overlay">
       <div class="loading-box">
         <div class="spinner"></div>
-        <span>Loading…</span>
+        {#if $downloadProgress !== null}
+          <div class="progress-wrap">
+            {#if $downloadProgress < 0}
+              <div class="progress-bar indeterminate"></div>
+            {:else}
+              <div class="progress-bar" style="width:{$downloadProgress * 100}%"></div>
+            {/if}
+          </div>
+          <span>
+            {$downloadProgress < 0 ? "Downloading…" : `Downloading… ${Math.round($downloadProgress * 100)}%`}
+          </span>
+        {:else}
+          <span>Loading…</span>
+        {/if}
       </div>
     </div>
   {/if}
@@ -65,10 +78,36 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     color: #00c8ff;
     font-size: 14px;
     font-family: monospace;
+    min-width: 200px;
+  }
+
+  .progress-wrap {
+    width: 100%;
+    height: 4px;
+    background: rgba(0, 200, 255, 0.15);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: #00c8ff;
+    border-radius: 2px;
+    transition: width 0.1s linear;
+  }
+
+  .progress-bar.indeterminate {
+    width: 40%;
+    animation: slide 1.2s ease-in-out infinite;
+  }
+
+  @keyframes slide {
+    0% { transform: translateX(-150%); }
+    100% { transform: translateX(350%); }
   }
 
   .spinner {

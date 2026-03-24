@@ -26,6 +26,8 @@ export type Mode = "idle" | "ws" | "file";
 export const mode = writable<Mode>("idle");
 export const connected = writable(false);
 export const loading = writable(false);
+/** URLダウンロードの進捗 (0〜1)。ダウンロード中以外は null */
+export const downloadProgress = writable<number | null>(null);
 export const errorMsg = writable<string | null>(null);
 
 // ── Simulation data ──────────────────────────────────────────────────────────
@@ -532,10 +534,37 @@ export async function loadUrl(
       return "not_found";
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    // Content-Length があれば進捗を表示、なければ不確定プログレス
+    const contentLength = parseInt(res.headers.get("Content-Length") ?? "0", 10);
+    const reader = res.body!.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    downloadProgress.set(contentLength > 0 ? 0 : -1);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      if (contentLength > 0) downloadProgress.set(received / contentLength);
+    }
+
+    downloadProgress.set(null);
+
+    // チャンクを結合して ArrayBuffer に変換
+    const total = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      total.set(chunk, offset);
+      offset += chunk.length;
+    }
+
     const filename = url.split("/").pop()?.split("?")[0] ?? "archive.7z";
-    await loadRaw(await res.arrayBuffer(), filename);
+    await loadRaw(total.buffer, filename);
     return "ok";
   } catch (e) {
+    downloadProgress.set(null);
     errorMsg.set(`Failed to load URL: ${e}`);
     mode.set("idle");
     return "error";
