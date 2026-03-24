@@ -434,6 +434,7 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   const configKey = Array.from(files.keys()).find((k) => k.endsWith("CONFIG"));
   if (configKey) {
     handleLogFrame(LogProtoCodec.decode(files.get(configKey)!));
+    files.delete(configKey);
   }
 
   const initialKey = Array.from(files.keys()).find((k) =>
@@ -441,6 +442,7 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   );
   if (initialKey) {
     handleLogFrame(LogProtoCodec.decode(files.get(initialKey)!));
+    files.delete(initialKey);
   }
 
   // Collect all N/UPDATES and N/COMMANDS entries and process in numeric order
@@ -458,15 +460,17 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
 
   for (const { key } of collectStepFiles("/UPDATES")) {
     handleLogFrame(LogProtoCodec.decode(files.get(key)!));
+    files.delete(key);
   }
 
   for (const { key } of collectStepFiles("/COMMANDS")) {
     handleLogFrame(LogProtoCodec.decode(files.get(key)!));
+    files.delete(key);
   }
 
   // N/PERCEPTION/agentId 形式のファイルをすべてパース
   // パスは "rescue.log/1/PERCEPTION/123" または "1/PERCEPTION/123" 両方に対応
-  for (const k of files.keys()) {
+  for (const k of Array.from(files.keys())) {
     if (!k.includes("/PERCEPTION/")) continue;
     const parts = k.split("/");
     const percIdx = parts.indexOf("PERCEPTION");
@@ -475,6 +479,7 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
     const agentId = parseInt(parts[percIdx + 1], 10);
     if (isNaN(step) || isNaN(agentId)) continue;
     handleLogFrame(LogProtoCodec.decode(files.get(k)!));
+    files.delete(k);
   }
 
   // ステップ1のスナップショットから瓦礫の初期 repairCost 合計を計算
