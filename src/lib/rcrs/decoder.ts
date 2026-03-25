@@ -302,6 +302,7 @@ export function peekPerceptionEntityId(bytes: Uint8Array): number | null {
  */
 export function* readDelimitedFrames(
   buffer: ArrayBuffer,
+  onProgress?: (pos: number, total: number) => void,
 ): Generator<Uint8Array> {
   const bytes = new Uint8Array(buffer);
   if (bytes.length === 0) return;
@@ -337,5 +338,6 @@ export function* readDelimitedFrames(
 
     yield bytes.slice(pos, pos + len);
     pos += len;
+    onProgress?.(pos, bytes.length);
   }
 }

@@ -7,7 +7,7 @@
   import ScorePanel from "$lib/components/ScorePanel.svelte";
   import SimMap from "$lib/components/SimMap.svelte";
   import TeamNamePanel from "$lib/components/TeamNamePanel.svelte";
-  import { downloadProgress, loading } from "$lib/stores/simulation";
+  import { downloadProgress, loading, parseProgress } from "$lib/stores/simulation";
 
 </script>
 
@@ -38,6 +38,11 @@
           <span>
             {$downloadProgress < 0 ? "Downloading…" : `Downloading… ${Math.round($downloadProgress * 100)}%`}
           </span>
+        {:else if $parseProgress !== null}
+          <div class="progress-wrap">
+            <div class="progress-bar" style="width:{$parseProgress * 100}%"></div>
+          </div>
+          <span>Parsing… {Math.round($parseProgress * 100)}%</span>
         {:else}
           <span>Loading…</span>
         {/if}

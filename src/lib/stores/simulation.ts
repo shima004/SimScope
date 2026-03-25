@@ -28,6 +28,8 @@ export const connected = writable(false);
 export const loading = writable(false);
 /** URLダウンロードの進捗 (0〜1)。ダウンロード中以外は null */
 export const downloadProgress = writable<number | null>(null);
+/** ログパース進捗 (0〜1)。パース中以外は null */
+export const parseProgress = writable<number | null>(null);
 export const errorMsg = writable<string | null>(null);
 
 // ── Simulation data ──────────────────────────────────────────────────────────
@@ -413,13 +415,24 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   // .xz/.lzma: single raw RCRS log (delimited LogProto frame stream)
   const rawLog = files.get("__raw_log__");
   if (rawLog) {
-    for (const frame of readDelimitedFrames(rawLog.buffer as ArrayBuffer)) {
+    parseProgress.set(0);
+    let lastYield = Date.now();
+    for (const frame of readDelimitedFrames(
+      rawLog.buffer as ArrayBuffer,
+      (pos, total) => parseProgress.set(pos / total),
+    )) {
       const msg = LogProtoCodec.decode(frame);
       // Discard civilian PERCEPTION frames before handleLogFrame to save memory
       if (msg.perception !== undefined &&
           baseEntities.get(msg.perception.entityID)?.urn === EntityURN.CIVILIAN) continue;
       handleLogFrame(msg);
+      // Yield to the browser periodically so the UI can re-render
+      if (Date.now() - lastYield > 16) {
+        await new Promise<void>((r) => setTimeout(r, 0));
+        lastYield = Date.now();
+      }
     }
+    parseProgress.set(null);
     const step1 = new Map<number, SimEntity>(
       Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }]),
     );
@@ -464,34 +477,57 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
       .sort((a, b) => a.step - b.step);
   }
 
-  for (const { key } of collectStepFiles("/UPDATES")) {
-    handleLogFrame(LogProtoCodec.decode(files.get(key)!));
-    files.delete(key);
+  const updateKeys = collectStepFiles("/UPDATES");
+  const commandKeys = collectStepFiles("/COMMANDS");
+  const percKeys = Array.from(files.keys()).filter((k) => k.includes("/PERCEPTION/"));
+  const totalFiles = updateKeys.length + commandKeys.length + percKeys.length;
+  let parsedFiles = 0;
+  parseProgress.set(0);
+  let lastYield = Date.now();
+
+  // Helper to yield to the browser if more than ~16ms has passed
+  async function maybeYield() {
+    if (Date.now() - lastYield > 16) {
+      await new Promise<void>((r) => setTimeout(r, 0));
+      lastYield = Date.now();
+    }
   }
 
-  for (const { key } of collectStepFiles("/COMMANDS")) {
+  for (const { key } of updateKeys) {
     handleLogFrame(LogProtoCodec.decode(files.get(key)!));
     files.delete(key);
+    parseProgress.set(++parsedFiles / totalFiles);
+    await maybeYield();
+  }
+
+  for (const { key } of commandKeys) {
+    handleLogFrame(LogProtoCodec.decode(files.get(key)!));
+    files.delete(key);
+    parseProgress.set(++parsedFiles / totalFiles);
+    await maybeYield();
   }
 
   // N/PERCEPTION/agentId 形式のファイルをすべてパース
   // パスは "rescue.log/1/PERCEPTION/123" または "1/PERCEPTION/123" 両方に対応
-  for (const k of Array.from(files.keys())) {
-    if (!k.includes("/PERCEPTION/")) continue;
+  for (const k of percKeys) {
     const parts = k.split("/");
     const percIdx = parts.indexOf("PERCEPTION");
-    if (percIdx < 1) continue;
+    if (percIdx < 1) { parsedFiles++; continue; }
     const step = parseInt(parts[percIdx - 1], 10);
     const agentId = parseInt(parts[percIdx + 1], 10);
-    if (isNaN(step) || isNaN(agentId)) continue;
+    if (isNaN(step) || isNaN(agentId)) { parsedFiles++; continue; }
     // Civilian perception data is not used — skip to save memory
     if (baseEntities.get(agentId)?.urn === EntityURN.CIVILIAN) {
       files.delete(k);
-      continue;
+    } else {
+      handleLogFrame(LogProtoCodec.decode(files.get(k)!));
+      files.delete(k);
     }
-    handleLogFrame(LogProtoCodec.decode(files.get(k)!));
-    files.delete(k);
+    parseProgress.set(++parsedFiles / totalFiles);
+    await maybeYield();
   }
+
+  parseProgress.set(null);
 
   // ステップ1のスナップショットから瓦礫の初期 repairCost 合計を計算
   const step1 = new Map<number, SimEntity>(
