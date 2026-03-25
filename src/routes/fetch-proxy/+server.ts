@@ -23,9 +23,12 @@ export const GET: RequestHandler = async ({ url }) => {
     }
     const contentType =
       upstream.headers.get("content-type") ?? "application/octet-stream";
+    const responseHeaders: Record<string, string> = { "Content-Type": contentType };
+    const contentLength = upstream.headers.get("content-length");
+    if (contentLength) responseHeaders["Content-Length"] = contentLength;
     return new Response(upstream.body, {
       status: upstream.status,
-      headers: { "Content-Type": contentType },
+      headers: responseHeaders,
     });
   } catch (e) {
     return new Response(String(e), { status: 502 });

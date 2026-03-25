@@ -97,7 +97,6 @@
     height: 100%;
     background: #00c8ff;
     border-radius: 2px;
-    transition: width 0.1s linear;
   }
 
   .progress-bar.indeterminate {
