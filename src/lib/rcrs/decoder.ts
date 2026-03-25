@@ -233,6 +233,65 @@ export function applyChanges(
 }
 
 /**
+ * Peek at a raw LogProto frame (Uint8Array) and return the entityID if it is a
+ * PerceptionLogProto frame, or null otherwise.  This avoids a full protobuf
+ * decode and is used to filter out unwanted agents before the expensive parse.
+ *
+ * Wire layout used:
+ *   LogProto.perception = field 4, wire type 2 → tag byte 0x22
+ *   PerceptionLogProto.entityID = field 2, wire type 0 → tag byte 0x10
+ */
+export function peekPerceptionEntityId(bytes: Uint8Array): number | null {
+  // First byte of a perception frame must be the field-4 LEN tag (0x22)
+  if (bytes.length < 2 || bytes[0] !== 0x22) return null;
+
+  // Skip the varint sub-message length
+  let pos = 1;
+  while (pos < bytes.length && (bytes[pos] & 0x80) !== 0) pos++;
+  pos++; // consume last varint byte
+
+  // Scan PerceptionLogProto bytes for entityID (field 2, tag 0x10)
+  while (pos < bytes.length) {
+    const tag = bytes[pos++];
+    const fieldNum = tag >>> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNum === 2 && wireType === 0) {
+      // Read varint int32 value
+      let val = 0, shift = 0;
+      while (pos < bytes.length) {
+        const b = bytes[pos++];
+        val |= (b & 0x7f) << shift;
+        shift += 7;
+        if ((b & 0x80) === 0) break;
+      }
+      return val;
+    }
+
+    // Skip this field according to its wire type
+    switch (wireType) {
+      case 0: // varint
+        while (pos < bytes.length && (bytes[pos++] & 0x80) !== 0); break;
+      case 1: pos += 8; break; // 64-bit
+      case 2: { // LEN-delimited
+        let len = 0, shift = 0;
+        while (pos < bytes.length) {
+          const b = bytes[pos++];
+          len |= (b & 0x7f) << shift;
+          shift += 7;
+          if ((b & 0x80) === 0) break;
+        }
+        pos += len;
+        break;
+      }
+      case 5: pos += 4; break; // 32-bit
+      default: return null;
+    }
+  }
+  return null;
+}
+
+/**
  * Parse a sequence of length-delimited LogProto frames from a binary buffer.
  *
  * Format auto-detection:

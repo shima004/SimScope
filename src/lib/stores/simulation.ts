@@ -414,7 +414,11 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   const rawLog = files.get("__raw_log__");
   if (rawLog) {
     for (const frame of readDelimitedFrames(rawLog.buffer as ArrayBuffer)) {
-      handleLogFrame(LogProtoCodec.decode(frame));
+      const msg = LogProtoCodec.decode(frame);
+      // Discard civilian PERCEPTION frames before handleLogFrame to save memory
+      if (msg.perception !== undefined &&
+          baseEntities.get(msg.perception.entityID)?.urn === EntityURN.CIVILIAN) continue;
+      handleLogFrame(msg);
     }
     const step1 = new Map<number, SimEntity>(
       Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }]),
@@ -552,7 +556,7 @@ export async function loadUrl(
       if (done) break;
       chunks.push(value);
       received += value.length;
-      if (contentLength > 0) downloadProgress.set(received / contentLength);
+      if (contentLength > 0) downloadProgress.set(Math.min(1, received / contentLength));
     }
 
     downloadProgress.set(null);
