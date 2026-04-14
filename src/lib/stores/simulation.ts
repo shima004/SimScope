@@ -101,6 +101,15 @@ export interface AgentAction {
   path?: number[];  // AK_MOVE: 通過エリア entity ID 列（末尾が目的地）
 }
 
+export type SimEventType = 'rescue_start' | 'rescue_end' | 'carry_start' | 'carry_end';
+
+export interface SimEvent {
+  step: number;
+  type: SimEventType;
+  agentId: number;
+  targetId: number;
+}
+
 export const entities = writable<Map<number, SimEntity>>(new Map());
 export const animatedEntities = writable<Map<number, SimEntity>>(new Map());
 export const currentStep = writable(0);
@@ -133,6 +142,9 @@ export const selectedEntity = derived(
   ([$entities, $selectedId]) =>
     $selectedId !== null ? ($entities.get($selectedId) ?? null) : null,
 );
+
+/** シミュレーション中に発生したイベント一覧（ファイルモードのみ） */
+export const simEvents = writable<SimEvent[]>([]);
 
 /** ピン止め中のエージェント ID */
 export const pinnedAgentId = writable<number | null>(null);
@@ -447,6 +459,7 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
     initialBlockadeCost.set(totalCost);
     currentStep.set(0);
     rebuildState(0);
+    computeSimEvents();
     return;
   }
 
@@ -545,6 +558,7 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
 
   currentStep.set(0);
   rebuildState(0);
+  computeSimEvents();
 }
 
 export async function loadFile(file: File) {
@@ -655,6 +669,51 @@ function rebuildState(targetStep: number) {
 
 export function getCommandsAtStep(step: number): Map<number, AgentAction> {
   return commandTimeline.get(step) ?? new Map();
+}
+
+export function computeSimEvents(): void {
+  const result: SimEvent[] = [];
+  const maxS = get(maxStep);
+  const ambulanceCarrying = new Map<number, number>(); // ambulanceId → civilianId
+
+  for (let step = 1; step <= maxS; step++) {
+    const cur = commandTimeline.get(step);
+    const prev = commandTimeline.get(step - 1);
+
+    if (cur) {
+      for (const [agentId, action] of cur) {
+        if (action.urn === CommandURN.AK_LOAD && action.target !== undefined) {
+          ambulanceCarrying.set(agentId, action.target);
+          result.push({ step, type: 'carry_start', agentId, targetId: action.target });
+        } else if (action.urn === CommandURN.AK_UNLOAD) {
+          const civilianId = ambulanceCarrying.get(agentId);
+          if (civilianId !== undefined) {
+            result.push({ step, type: 'carry_end', agentId, targetId: civilianId });
+            ambulanceCarrying.delete(agentId);
+          }
+        }
+        if (action.urn === CommandURN.AK_RESCUE && action.target !== undefined) {
+          const prevAction = prev?.get(agentId);
+          if (prevAction?.urn !== CommandURN.AK_RESCUE || prevAction.target !== action.target) {
+            result.push({ step, type: 'rescue_start', agentId, targetId: action.target });
+          }
+        }
+      }
+    }
+
+    // 救助終了: 前ステップに AK_RESCUE があり、現ステップにない（または対象が変わった）
+    if (prev) {
+      for (const [agentId, prevAction] of prev) {
+        if (prevAction.urn !== CommandURN.AK_RESCUE || prevAction.target === undefined) continue;
+        const curAction = cur?.get(agentId);
+        if (curAction?.urn !== CommandURN.AK_RESCUE || curAction.target !== prevAction.target) {
+          result.push({ step: step - 1, type: 'rescue_end', agentId, targetId: prevAction.target });
+        }
+      }
+    }
+  }
+
+  simEvents.set(result.sort((a, b) => a.step - b.step));
 }
 
 export function computeNextSnapshot(nextStep: number): Map<number, SimEntity> {
@@ -844,4 +903,5 @@ function reset() {
   perceivedEntities.set(new Map());
   pinnedAgentId.set(null);
   inspectedId.set(null);
+  simEvents.set([]);
 }

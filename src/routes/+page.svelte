@@ -7,19 +7,42 @@
   import ScorePanel from "$lib/components/ScorePanel.svelte";
   import SimMap from "$lib/components/SimMap.svelte";
   import TeamNamePanel from "$lib/components/TeamNamePanel.svelte";
+  import TimelinePanel from "$lib/components/TimelinePanel.svelte";
   import { downloadProgress, loading, parseProgress } from "$lib/stores/simulation";
 
+  let timelineOpen = $state(false);
+
+  const TIMELINE_WIDTH = 272;
+  const PANEL_GAP = 12;
+  const leftOffset = $derived(timelineOpen ? TIMELINE_WIDTH + PANEL_GAP : 0);
 </script>
 
 <div class="app">
   <SimMap />
-  <div class="left-col">
+
+  <!-- Sliding timeline panel -->
+  <div class="timeline-drawer" class:open={timelineOpen} style="width:{TIMELINE_WIDTH}px">
+    <TimelinePanel />
+  </div>
+
+  <!-- Toggle tab -->
+  <button
+    class="timeline-toggle"
+    class:open={timelineOpen}
+    style="left:{timelineOpen ? TIMELINE_WIDTH : 0}px"
+    onclick={() => (timelineOpen = !timelineOpen)}
+    title={timelineOpen ? "Close timeline" : "Open timeline"}
+  >
+    {timelineOpen ? "◂" : "▸"}
+  </button>
+
+  <div class="left-col" style="left:{leftOffset + PANEL_GAP}px">
     <ControlPanel />
     <TeamNamePanel />
     <ScorePanel />
     <ChannelFilterPanel />
   </div>
-  <IdleAgentsPanel />
+  <IdleAgentsPanel leftOffset={leftOffset + PANEL_GAP} />
   <InfoPanel />
   <CivilianStatusPanel />
 
@@ -58,14 +81,60 @@
     background: #0d1117;
   }
 
+  .timeline-drawer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: rgba(10, 16, 24, 0.96);
+    border-right: 1px solid rgba(0, 200, 255, 0.18);
+    backdrop-filter: blur(8px);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    z-index: 20;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    overflow: hidden;
+  }
+
+  .timeline-drawer.open {
+    transform: translateX(0);
+  }
+
+  .timeline-toggle {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 21;
+    width: 20px;
+    height: 52px;
+    background: rgba(0, 180, 255, 0.18);
+    border: 1px solid rgba(0, 200, 255, 0.55);
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    color: #00e0ff;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: left 0.25s ease, background 0.12s, box-shadow 0.12s;
+    box-shadow: 2px 0 10px rgba(0, 180, 255, 0.3);
+  }
+
+  .timeline-toggle:hover {
+    background: rgba(0, 200, 255, 0.32);
+    box-shadow: 2px 0 14px rgba(0, 200, 255, 0.5);
+  }
+
   .left-col {
     position: absolute;
     top: 12px;
-    left: 12px;
     display: flex;
     flex-direction: column;
     gap: 8px;
     z-index: 10;
+    transition: left 0.25s ease;
   }
 
   .loading-overlay {
@@ -128,5 +197,4 @@
       transform: rotate(360deg);
     }
   }
-
 </style>

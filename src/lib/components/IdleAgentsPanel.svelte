@@ -13,6 +13,8 @@
   } from "$lib/stores/simulation";
   import { get } from "svelte/store";
 
+  const { leftOffset = 12 }: { leftOffset?: number } = $props();
+
   const RESCUE_AGENT_URNS = [
     EntityURN.FIRE_BRIGADE,
     EntityURN.AMBULANCE_TEAM,
@@ -78,7 +80,7 @@
 </script>
 
 {#if hasAny}
-  <div class="panel" class:collapsed>
+  <div class="panel" class:collapsed style="left:{leftOffset}px">
     <div
       class="panel-header"
       role="button"
@@ -120,7 +122,6 @@
   .panel {
     position: absolute;
     bottom: 16px;
-    left: 12px;
     width: 230px;
     max-height: 170px;
     overflow-y: auto;
@@ -130,6 +131,7 @@
     color: #c8d8e8;
     font-size: 12px;
     backdrop-filter: blur(6px);
+    transition: left 0.25s ease;
     box-shadow: 0 0 20px rgba(0, 180, 255, 0.08);
     z-index: 10;
     display: flex;
