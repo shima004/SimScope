@@ -30,6 +30,8 @@ export const loading = writable(false);
 export const downloadProgress = writable<number | null>(null);
 /** ログパース進捗 (0〜1)。パース中以外は null */
 export const parseProgress = writable<number | null>(null);
+/** 7z解凍進捗 (0〜100)。解凍中以外は null */
+export const extractProgress = writable<number | null>(null);
 export const errorMsg = writable<string | null>(null);
 
 // ── Simulation data ──────────────────────────────────────────────────────────
@@ -95,13 +97,17 @@ export interface CommMessage {
 
 export interface AgentAction {
   urn: number;
-  target?: number;  // AK_CLEAR: 対象ブロッケード entity ID
-  destX?: number;   // AK_CLEAR_AREA: 中心 X
-  destY?: number;   // AK_CLEAR_AREA: 中心 Y
-  path?: number[];  // AK_MOVE: 通過エリア entity ID 列（末尾が目的地）
+  target?: number; // AK_CLEAR: 対象ブロッケード entity ID
+  destX?: number; // AK_CLEAR_AREA: 中心 X
+  destY?: number; // AK_CLEAR_AREA: 中心 Y
+  path?: number[]; // AK_MOVE: 通過エリア entity ID 列（末尾が目的地）
 }
 
-export type SimEventType = 'rescue_start' | 'rescue_end' | 'carry_start' | 'carry_end';
+export type SimEventType =
+  | "rescue_start"
+  | "rescue_end"
+  | "carry_start"
+  | "carry_end";
 
 export interface SimEvent {
   step: number;
@@ -358,19 +364,36 @@ export function connectWS(url: string) {
             messageBytes?: number;
             channels?: number[];
           }[]) {
-            const { agentId, urn, target, destX, destY, channel, messageBytes, channels } = c;
+            const {
+              agentId,
+              urn,
+              target,
+              destX,
+              destY,
+              channel,
+              messageBytes,
+              channels,
+            } = c;
             if (urn === CommandURN.AK_SPEAK) {
               const cur = commMap.get(agentId) ?? { speak: 0, bytes: 0 };
-              commMap.set(agentId, { speak: cur.speak + 1, bytes: cur.bytes + (messageBytes ?? 0) });
+              commMap.set(agentId, {
+                speak: cur.speak + 1,
+                bytes: cur.bytes + (messageBytes ?? 0),
+              });
               if (channel !== undefined) {
                 const cs = speakMap.get(channel) ?? { count: 0, bytes: 0 };
-                speakMap.set(channel, { count: cs.count + 1, bytes: cs.bytes + (messageBytes ?? 0) });
+                speakMap.set(channel, {
+                  count: cs.count + 1,
+                  bytes: cs.bytes + (messageBytes ?? 0),
+                });
               }
               continue;
             }
-            if (urn === CommandURN.AK_SAY || urn === CommandURN.AK_TELL) continue;
+            if (urn === CommandURN.AK_SAY || urn === CommandURN.AK_TELL)
+              continue;
             if (urn === CommandURN.AK_SUBSCRIBE) {
-              if (channels && channels.length > 0) subMap.set(agentId, channels);
+              if (channels && channels.length > 0)
+                subMap.set(agentId, channels);
               continue;
             }
             const action: AgentAction = { urn };
@@ -423,7 +446,20 @@ export function disconnectWS() {
 // ── File loading ──────────────────────────────────────────────────────────────
 
 async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
-  const files = await extract7zAllFiles(raw, filename);
+  extractProgress.set(0);
+  let pendingPct = 0;
+  let rafScheduled = false;
+  const files = await extract7zAllFiles(raw, filename, (pct) => {
+    pendingPct = pct;
+    if (!rafScheduled) {
+      rafScheduled = true;
+      requestAnimationFrame(() => {
+        rafScheduled = false;
+        extractProgress.set(pendingPct);
+      });
+    }
+  });
+  extractProgress.set(null);
 
   // .xz/.lzma: single raw RCRS log (delimited LogProto frame stream)
   const rawLog = files.get("__raw_log__");
@@ -436,8 +472,11 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
     )) {
       const msg = LogProtoCodec.decode(frame);
       // Discard civilian PERCEPTION frames before handleLogFrame to save memory
-      if (msg.perception !== undefined &&
-          baseEntities.get(msg.perception.entityID)?.urn === EntityURN.CIVILIAN) continue;
+      if (
+        msg.perception !== undefined &&
+        baseEntities.get(msg.perception.entityID)?.urn === EntityURN.CIVILIAN
+      )
+        continue;
       handleLogFrame(msg);
       // Yield to the browser periodically so the UI can re-render
       if (Date.now() - lastYield > 16) {
@@ -493,7 +532,9 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
 
   const updateKeys = collectStepFiles("/UPDATES");
   const commandKeys = collectStepFiles("/COMMANDS");
-  const percKeys = Array.from(files.keys()).filter((k) => k.includes("/PERCEPTION/"));
+  const percKeys = Array.from(files.keys()).filter((k) =>
+    k.includes("/PERCEPTION/"),
+  );
   const totalFiles = updateKeys.length + commandKeys.length + percKeys.length;
   let parsedFiles = 0;
   parseProgress.set(0);
@@ -526,10 +567,16 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   for (const k of percKeys) {
     const parts = k.split("/");
     const percIdx = parts.indexOf("PERCEPTION");
-    if (percIdx < 1) { parsedFiles++; continue; }
+    if (percIdx < 1) {
+      parsedFiles++;
+      continue;
+    }
     const step = parseInt(parts[percIdx - 1], 10);
     const agentId = parseInt(parts[percIdx + 1], 10);
-    if (isNaN(step) || isNaN(agentId)) { parsedFiles++; continue; }
+    if (isNaN(step) || isNaN(agentId)) {
+      parsedFiles++;
+      continue;
+    }
     // Civilian perception data is not used — skip to save memory
     if (baseEntities.get(agentId)?.urn === EntityURN.CIVILIAN) {
       files.delete(k);
@@ -596,7 +643,10 @@ export async function loadUrl(
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     // Content-Length があれば進捗を表示、なければ不確定プログレス
-    const contentLength = parseInt(res.headers.get("Content-Length") ?? "0", 10);
+    const contentLength = parseInt(
+      res.headers.get("Content-Length") ?? "0",
+      10,
+    );
     const reader = res.body!.getReader();
     const chunks: Uint8Array[] = [];
     let received = 0;
@@ -607,7 +657,8 @@ export async function loadUrl(
       if (done) break;
       chunks.push(value);
       received += value.length;
-      if (contentLength > 0) downloadProgress.set(Math.min(1, received / contentLength));
+      if (contentLength > 0)
+        downloadProgress.set(Math.min(1, received / contentLength));
     }
 
     downloadProgress.set(null);
@@ -684,18 +735,39 @@ export function computeSimEvents(): void {
       for (const [agentId, action] of cur) {
         if (action.urn === CommandURN.AK_LOAD && action.target !== undefined) {
           ambulanceCarrying.set(agentId, action.target);
-          result.push({ step, type: 'carry_start', agentId, targetId: action.target });
+          result.push({
+            step,
+            type: "carry_start",
+            agentId,
+            targetId: action.target,
+          });
         } else if (action.urn === CommandURN.AK_UNLOAD) {
           const civilianId = ambulanceCarrying.get(agentId);
           if (civilianId !== undefined) {
-            result.push({ step, type: 'carry_end', agentId, targetId: civilianId });
+            result.push({
+              step,
+              type: "carry_end",
+              agentId,
+              targetId: civilianId,
+            });
             ambulanceCarrying.delete(agentId);
           }
         }
-        if (action.urn === CommandURN.AK_RESCUE && action.target !== undefined) {
+        if (
+          action.urn === CommandURN.AK_RESCUE &&
+          action.target !== undefined
+        ) {
           const prevAction = prev?.get(agentId);
-          if (prevAction?.urn !== CommandURN.AK_RESCUE || prevAction.target !== action.target) {
-            result.push({ step, type: 'rescue_start', agentId, targetId: action.target });
+          if (
+            prevAction?.urn !== CommandURN.AK_RESCUE ||
+            prevAction.target !== action.target
+          ) {
+            result.push({
+              step,
+              type: "rescue_start",
+              agentId,
+              targetId: action.target,
+            });
           }
         }
       }
@@ -704,10 +776,22 @@ export function computeSimEvents(): void {
     // 救助終了: 前ステップに AK_RESCUE があり、現ステップにない（または対象が変わった）
     if (prev) {
       for (const [agentId, prevAction] of prev) {
-        if (prevAction.urn !== CommandURN.AK_RESCUE || prevAction.target === undefined) continue;
+        if (
+          prevAction.urn !== CommandURN.AK_RESCUE ||
+          prevAction.target === undefined
+        )
+          continue;
         const curAction = cur?.get(agentId);
-        if (curAction?.urn !== CommandURN.AK_RESCUE || curAction.target !== prevAction.target) {
-          result.push({ step: step - 1, type: 'rescue_end', agentId, targetId: prevAction.target });
+        if (
+          curAction?.urn !== CommandURN.AK_RESCUE ||
+          curAction.target !== prevAction.target
+        ) {
+          result.push({
+            step: step - 1,
+            type: "rescue_end",
+            agentId,
+            targetId: prevAction.target,
+          });
         }
       }
     }
@@ -767,7 +851,8 @@ function handleLogFrame(frame: LogProtoMsg) {
       const target = cmd.components[ComponentCommandURN.Target]?.entityID;
       const destX = cmd.components[ComponentCommandURN.DestinationX]?.intValue;
       const destY = cmd.components[ComponentCommandURN.DestinationY]?.intValue;
-      const path = cmd.components[ComponentCommandURN.Path]?.entityIDList?.values;
+      const path =
+        cmd.components[ComponentCommandURN.Path]?.entityIDList?.values;
       if (target !== undefined) action.target = target;
       if (destX !== undefined) action.destX = destX;
       if (destY !== undefined) action.destY = destY;

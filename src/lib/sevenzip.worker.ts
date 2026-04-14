@@ -5,9 +5,17 @@ import wasmUrl from "7z-wasm/7zz.wasm?url";
 let modulePromise: Promise<SevenZipModule> | null = null;
 let extractCounter = 0;
 
+// Mutable print handler — passed to Emscripten at init time via a wrapper closure.
+// Emscripten binds the print function at initialization, so we can't replace it
+// afterward. Instead we keep a single wrapper that delegates to this variable.
+let printHandler: ((line: string) => void) | null = null;
+
 function getModule(): Promise<SevenZipModule> {
   if (!modulePromise) {
-    modulePromise = SevenZipFactory({ locateFile: () => wasmUrl });
+    modulePromise = SevenZipFactory({
+      locateFile: () => wasmUrl,
+      print: (line: string) => printHandler?.(line),
+    });
   }
   return modulePromise;
 }
@@ -48,6 +56,35 @@ function cleanupDir(sz: SevenZipModule, dir: string) {
   }
 }
 
+// Send progress to main thread (0–100)
+function sendProgress(pct: number) {
+  self.postMessage({ ok: "progress", pct });
+}
+
+// Extract with progress. Output format with -bb1: " XX% NNNNN\b...\b- filepath"
+// Throttle to 1% increments to avoid flooding the main thread with messages.
+function extractWithProgress(
+  sz: SevenZipModule,
+  inPath: string,
+  outDir: string,
+) {
+  let lastPct = -1;
+  printHandler = (line: string) => {
+    const m = line.match(/^\s*(\d+)%/);
+    if (!m) return;
+    const pct = parseInt(m[1], 10);
+    if (pct !== lastPct) {
+      lastPct = pct;
+      sendProgress(pct);
+    }
+  };
+  try {
+    sz.callMain(["x", inPath, `-o${outDir}`, "-y", "-bb1"]);
+  } finally {
+    printHandler = null;
+  }
+}
+
 async function extract(
   buffer: ArrayBuffer,
   filename: string,
@@ -67,7 +104,7 @@ async function extract(
 
   sz.FS.writeFile(inPath, new Uint8Array(buffer));
   sz.FS.mkdir(outDir);
-  sz.callMain(["x", inPath, `-o${outDir}`, "-y"]);
+  extractWithProgress(sz, inPath, outDir);
 
   if (ext === ".tgz") {
     const entries = sz.FS.readdir(outDir).filter(
@@ -124,10 +161,7 @@ self.onmessage = async (
     const transfers: Transferable[] = entries.map(
       ([, v]) => v.buffer as ArrayBuffer,
     );
-    (self as unknown as DedicatedWorkerGlobalScope).postMessage(
-      { ok: true, entries },
-      transfers,
-    );
+    (self as unknown as Worker).postMessage({ ok: true, entries }, transfers);
   } catch (err) {
     self.postMessage({ ok: false, error: String(err) });
   }

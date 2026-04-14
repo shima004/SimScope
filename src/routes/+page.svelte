@@ -8,7 +8,12 @@
   import SimMap from "$lib/components/SimMap.svelte";
   import TeamNamePanel from "$lib/components/TeamNamePanel.svelte";
   import TimelinePanel from "$lib/components/TimelinePanel.svelte";
-  import { downloadProgress, loading, parseProgress } from "$lib/stores/simulation";
+  import {
+    downloadProgress,
+    extractProgress,
+    loading,
+    parseProgress,
+  } from "$lib/stores/simulation";
 
   let timelineOpen = $state(false);
   let timelineWidth = $state(272);
@@ -19,13 +24,21 @@
   const TIMELINE_MAX_WIDTH = 520;
   const PANEL_GAP = 12;
   const clampedTimelineWidth = $derived(
-    Math.min(TIMELINE_MAX_WIDTH, Math.max(TIMELINE_MIN_WIDTH, timelineWidth))
+    Math.min(TIMELINE_MAX_WIDTH, Math.max(TIMELINE_MIN_WIDTH, timelineWidth)),
   );
-  const leftOffset = $derived(timelineOpen ? clampedTimelineWidth + PANEL_GAP : 0);
+  const leftOffset = $derived(
+    timelineOpen ? clampedTimelineWidth + PANEL_GAP : 0,
+  );
 
   function clampTimelineWidth(width: number) {
-    const viewportMax = viewportWidth > 0 ? Math.max(TIMELINE_MIN_WIDTH, viewportWidth - 160) : TIMELINE_MAX_WIDTH;
-    return Math.min(Math.min(TIMELINE_MAX_WIDTH, viewportMax), Math.max(TIMELINE_MIN_WIDTH, width));
+    const viewportMax =
+      viewportWidth > 0
+        ? Math.max(TIMELINE_MIN_WIDTH, viewportWidth - 160)
+        : TIMELINE_MAX_WIDTH;
+    return Math.min(
+      Math.min(TIMELINE_MAX_WIDTH, viewportMax),
+      Math.max(TIMELINE_MIN_WIDTH, width),
+    );
   }
 
   function startTimelineResize(event: PointerEvent) {
@@ -110,15 +123,28 @@
             {#if $downloadProgress < 0}
               <div class="progress-bar indeterminate"></div>
             {:else}
-              <div class="progress-bar" style="width:{$downloadProgress * 100}%"></div>
+              <div
+                class="progress-bar"
+                style="width:{$downloadProgress * 100}%"
+              ></div>
             {/if}
           </div>
           <span>
-            {$downloadProgress < 0 ? "Downloading…" : `Downloading… ${Math.round($downloadProgress * 100)}%`}
+            {$downloadProgress < 0
+              ? "Downloading…"
+              : `Downloading… ${Math.round($downloadProgress * 100)}%`}
           </span>
+        {:else if $extractProgress !== null}
+          <div class="progress-wrap">
+            <div class="progress-bar" style="width:{$extractProgress}%"></div>
+          </div>
+          <span>Extracting… {$extractProgress}%</span>
         {:else if $parseProgress !== null}
           <div class="progress-wrap">
-            <div class="progress-bar" style="width:{$parseProgress * 100}%"></div>
+            <div
+              class="progress-bar"
+              style="width:{$parseProgress * 100}%"
+            ></div>
           </div>
           <span>Parsing… {Math.round($parseProgress * 100)}%</span>
         {:else}
@@ -210,12 +236,17 @@
     align-items: center;
     justify-content: center;
     padding: 0;
-    transition: left 0.25s ease, background 0.12s, box-shadow 0.12s;
+    transition:
+      left 0.25s ease,
+      background 0.12s,
+      box-shadow 0.12s;
     box-shadow: 2px 0 10px rgba(0, 180, 255, 0.3);
   }
 
   .timeline-toggle.resizing {
-    transition: background 0.12s, box-shadow 0.12s;
+    transition:
+      background 0.12s,
+      box-shadow 0.12s;
   }
 
   .timeline-toggle:hover {
@@ -281,8 +312,12 @@
   }
 
   @keyframes slide {
-    0% { transform: translateX(-150%); }
-    100% { transform: translateX(350%); }
+    0% {
+      transform: translateX(-150%);
+    }
+    100% {
+      transform: translateX(350%);
+    }
   }
 
   .spinner {
