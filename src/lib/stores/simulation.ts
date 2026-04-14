@@ -15,6 +15,8 @@ import {
   isArea,
 } from "$lib/rcrs/urns";
 import { extract7zAllFiles } from "$lib/sevenzip";
+import type { PerceptionResult } from "$lib/stores/perception.worker";
+import PerceptionWorker from "$lib/stores/perception.worker?worker";
 import { derived, get, writable } from "svelte/store";
 
 type LogProtoMsg = ReturnType<(typeof LogProtoCodec)["decode"]>;
@@ -562,31 +564,58 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
     await maybeYield();
   }
 
-  // N/PERCEPTION/agentId 形式のファイルをすべてパース
-  // パスは "rescue.log/1/PERCEPTION/123" または "1/PERCEPTION/123" 両方に対応
+  // N/PERCEPTION/agentId 形式のファイルを Worker でバックグラウンドパース。
+  // メインスレッドはすぐに続行し、UPDATES/COMMANDS パース後にシミュを利用可能にする。
+  const civilianIds = Array.from(baseEntities.entries())
+    .filter(([, e]) => e.urn === EntityURN.CIVILIAN)
+    .map(([id]) => id);
+
+  const percEntries: { step: number; agentId: number; bytes: Uint8Array }[] =
+    [];
   for (const k of percKeys) {
     const parts = k.split("/");
     const percIdx = parts.indexOf("PERCEPTION");
-    if (percIdx < 1) {
-      parsedFiles++;
-      continue;
-    }
+    if (percIdx < 1) continue;
     const step = parseInt(parts[percIdx - 1], 10);
     const agentId = parseInt(parts[percIdx + 1], 10);
-    if (isNaN(step) || isNaN(agentId)) {
-      parsedFiles++;
-      continue;
-    }
-    // Civilian perception data is not used — skip to save memory
-    if (baseEntities.get(agentId)?.urn === EntityURN.CIVILIAN) {
-      files.delete(k);
-    } else {
-      handleLogFrame(LogProtoCodec.decode(files.get(k)!));
-      files.delete(k);
-    }
-    parseProgress.set(++parsedFiles / totalFiles);
-    await maybeYield();
+    if (isNaN(step) || isNaN(agentId)) continue;
+    const bytes = files.get(k);
+    if (bytes) percEntries.push({ step, agentId, bytes });
+    files.delete(k);
   }
+
+  // Start background worker — transfers Uint8Array buffers to avoid copying.
+  // Main thread continues immediately; perception data merges in when ready.
+  const percWorker = new PerceptionWorker();
+  percWorker.onmessage = (e: MessageEvent<PerceptionResult>) => {
+    const { perceptionTimeline: pt, commTimeline: ct, perceptionChanges: pc } =
+      e.data;
+    for (const [step, agents] of pt) {
+      if (!perceptionTimeline.has(step))
+        perceptionTimeline.set(step, new Map());
+      for (const [agentId, ids] of agents)
+        perceptionTimeline.get(step)!.set(agentId, ids);
+    }
+    for (const [step, agents] of ct) {
+      if (!commTimeline.has(step)) commTimeline.set(step, new Map());
+      for (const [agentId, msgs] of agents)
+        commTimeline.get(step)!.set(agentId, msgs as CommMessage[]);
+    }
+    for (const [step, agents] of pc) {
+      if (!perceptionChangesTimeline.has(step))
+        perceptionChangesTimeline.set(step, new Map());
+      for (const [agentId, changes] of agents)
+        perceptionChangesTimeline
+          .get(step)!
+          .set(agentId, changes as ChangeSetProto);
+    }
+    percWorker.terminate();
+  };
+
+  percWorker.postMessage(
+    { entries: percEntries, civilianIds },
+    percEntries.map((e) => e.bytes.buffer),
+  );
 
   parseProgress.set(null);
 
