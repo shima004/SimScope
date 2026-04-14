@@ -6,9 +6,12 @@
     currentStep,
     entities,
     focusPoint,
+    inspectedId,
     kernelConfig,
+    pinnedAgentId,
     selectedId,
   } from "$lib/stores/simulation";
+  import { get } from "svelte/store";
 
   const RESCUE_AGENT_URNS = [
     EntityURN.FIRE_BRIGADE,
@@ -65,7 +68,11 @@
   let collapsed = $state(false);
 
   function focusOn(agent: IdleAgent) {
-    selectedId.set(agent.id);
+    if (get(pinnedAgentId) !== null) {
+      inspectedId.set(agent.id);
+    } else {
+      selectedId.set(agent.id);
+    }
     focusPoint.set({ x: agent.x, y: agent.y });
   }
 </script>

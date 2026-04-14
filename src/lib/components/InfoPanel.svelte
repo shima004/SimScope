@@ -23,12 +23,14 @@
     agentReceivedComms,
     agentSubscriptions,
     entities,
+    focusPoint,
     inspectedEntity,
     inspectedId,
     pinnedAgentId,
     selectedEntity,
     selectedId,
   } from "$lib/stores/simulation";
+  import { get } from "svelte/store";
 
   function typeLabel(urn: number) {
     return EntityURNLabel[urn] ?? `URN:${urn}`;
@@ -126,7 +128,12 @@
             {@const dest = action.path[action.path.length - 1]}
             <div class="row">
               <span class="key">Dest</span>
-              <button class="val link" onclick={() => selectedId.set(dest)}>#{dest}</button>
+              <button class="val link" onclick={() => {
+                if (get(pinnedAgentId) !== null) inspectedId.set(dest);
+                else selectedId.set(dest);
+                const de = $entities.get(dest);
+                if (de && "x" in de) focusPoint.set({ x: (de as { x: number; y: number }).x, y: (de as { x: number; y: number }).y });
+              }}>#{dest}</button>
             </div>
           {/if}
         {/if}

@@ -5,10 +5,13 @@
     agentActions,
     entities,
     focusPoint,
+    inspectedId,
     perceivedEntities,
     perceptionViewMode,
+    pinnedAgentId,
     selectedId,
   } from "$lib/stores/simulation";
+  import { get } from "svelte/store";
 
   type CarryPair = { civilian: HumanEntity; carrier: HumanEntity };
   type MergedHuman = {
@@ -156,7 +159,11 @@
   );
 
   function focusOn(h: HumanEntity) {
-    selectedId.set(h.id);
+    if (get(pinnedAgentId) !== null) {
+      inspectedId.set(h.id);
+    } else {
+      selectedId.set(h.id);
+    }
     focusPoint.set({ x: h.x, y: h.y });
   }
 
