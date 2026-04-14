@@ -2,7 +2,7 @@
 
 English | [Japanese](README.md)
 
-![SimScope](https://github.com/user-attachments/assets/44532178-f40d-4d9c-bec3-4a4aa0079a61)
+![SimScope](https://github.com/user-attachments/assets/190ae118-fb06-408e-8b07-9e0e453af648)
 
 A visualizer for RoboCup Rescue Simulation (RRS). You can connect to a running kernel in real time or replay log files.
 
@@ -33,7 +33,7 @@ npm run dev
 
 ---
 
-## Usage
+## Connection Methods
 
 ### Replay a log file
 
@@ -120,8 +120,9 @@ http://localhost:3000/?url=https://example.com/log.7z&team=MyTeam&map=Tokyo
 - **Map** — Displays buildings, roads, and agents
 - **InfoPanel** — Detailed information and communication log for the selected entity
   - **📌** — Pin an entity to keep it displayed even when selecting others
-- **CivilianStatusPanel** — Civilian alive/buried status (collapsible by clicking the header)
-- **InjuredCivilianPanel** — List of injured civilians not in a refuge and not being carried
+- **CivilianStatusPanel** — Civilian survival, buriedness, and injury status (collapsible by clicking the header)
+- **IdleAgentPanel** — List of agents that are currently not executing an action (collapsible by clicking the header)
 - **Score** — Simulation score
 - **Injured in refuge** — Number of injured civilians in refuges / total injured
 - **Blockade cleared** — Percentage of total blockade repair cost that has been cleared
+- **Event Timeline** — Timeline view of important events
