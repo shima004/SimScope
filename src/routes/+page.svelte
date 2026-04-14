@@ -2,8 +2,8 @@
   import ChannelFilterPanel from "$lib/components/ChannelFilterPanel.svelte";
   import CivilianStatusPanel from "$lib/components/CivilianStatusPanel.svelte";
   import ControlPanel from "$lib/components/ControlPanel.svelte";
+  import IdleAgentsPanel from "$lib/components/IdleAgentsPanel.svelte";
   import InfoPanel from "$lib/components/InfoPanel.svelte";
-  import InjuredCivilianPanel from "$lib/components/InjuredCivilianPanel.svelte";
   import ScorePanel from "$lib/components/ScorePanel.svelte";
   import SimMap from "$lib/components/SimMap.svelte";
   import TeamNamePanel from "$lib/components/TeamNamePanel.svelte";
@@ -19,9 +19,9 @@
     <ScorePanel />
     <ChannelFilterPanel />
   </div>
+  <IdleAgentsPanel />
   <InfoPanel />
   <CivilianStatusPanel />
-  <InjuredCivilianPanel />
 
   {#if $loading}
     <div class="loading-overlay">

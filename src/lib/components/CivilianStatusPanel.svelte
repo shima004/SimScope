@@ -42,6 +42,20 @@
     return result;
   }
 
+  function calcInjured(map: Map<number, SimEntity>) {
+    const result: HumanEntity[] = [];
+    for (const e of map.values()) {
+      if (e.urn !== EntityURN.CIVILIAN) continue;
+      const h = e as HumanEntity;
+      if (h.buriedness > 0 || h.damage === 0) continue;
+      const pos = map.get(h.position);
+      if (pos?.urn === EntityURN.REFUGE || pos?.urn === EntityURN.AMBULANCE_TEAM)
+        continue;
+      result.push(h);
+    }
+    return result.sort((a, b) => a.hp - b.hp);
+  }
+
   function calcBuried(map: Map<number, SimEntity>, rescuedIds: Set<number>) {
     const result: HumanEntity[] = [];
     for (const e of map.values()) {
@@ -94,6 +108,7 @@
 
   const rescuedActual = $derived(calcRescued($entities));
   const carriedActual = $derived(calcCarried($entities));
+  const injuredActual = $derived(calcInjured($entities));
   const buriedActual = $derived(
     calcBuried($entities, new Set(rescuedActual.map((c) => c.id))),
   );
@@ -103,6 +118,9 @@
   );
   const carriedPerceived = $derived(
     $perceptionViewMode ? calcCarried($perceivedEntities) : [],
+  );
+  const injuredPerceived = $derived(
+    $perceptionViewMode ? calcInjured($perceivedEntities) : [],
   );
   const buriedPerceived = $derived(
     $perceptionViewMode
@@ -119,6 +137,9 @@
   const mergedRescued = $derived(
     $perceptionViewMode ? mergeHumans(rescuedPerceived, rescuedActual) : null,
   );
+  const mergedInjured = $derived(
+    $perceptionViewMode ? mergeHumans(injuredPerceived, injuredActual) : null,
+  );
   const mergedBuried = $derived(
     $perceptionViewMode ? mergeHumans(buriedPerceived, buriedActual) : null,
   );
@@ -127,9 +148,11 @@
     buriedActual.length > 0 ||
       rescuedActual.length > 0 ||
       carriedActual.length > 0 ||
+      injuredActual.length > 0 ||
       buriedPerceived.length > 0 ||
       rescuedPerceived.length > 0 ||
-      carriedPerceived.length > 0,
+      carriedPerceived.length > 0 ||
+      injuredPerceived.length > 0,
   );
 
   function focusOn(h: HumanEntity) {
@@ -141,7 +164,7 @@
 </script>
 
 {#if hasAny}
-  <div class="panel" class:dual={!!mergedCarried}>
+  <div class="panel" class:dual={!!mergedCarried} class:collapsed>
     <div
       class="panel-header"
       role="button"
@@ -249,6 +272,51 @@
           {/each}
         {/if}
 
+        <!-- Injured Civilians (dual) -->
+        {#if mergedInjured && mergedInjured.length > 0}
+          <div class="section-label">Injured ({mergedInjured.length})</div>
+          {#each mergedInjured as row (row.id)}
+            {@const rep = row.p ?? row.a!}
+            <button
+              class="dual-row"
+              onclick={() => focusOn(rep)}
+              class:selected={$selectedId === row.id}
+            >
+              <span class="cid" style="color:{entityColor(rep.urn)}"
+                >#{row.id}</span
+              >
+              <span class="dual-cell">
+                {#if row.p}
+                  <span class="bar-wrap"
+                    ><span
+                      class="bar hp"
+                      style="width:{Math.min(100, row.p.hp / 100)}%"
+                    ></span></span
+                  >
+                  <span class="num">{row.p.hp.toLocaleString()}</span>
+                  {#if row.p.damage > 0}<span class="badge dmg"
+                      >D:{row.p.damage}</span
+                    >{/if}
+                {/if}
+              </span>
+              <span class="dual-cell">
+                {#if row.a}
+                  <span class="bar-wrap"
+                    ><span
+                      class="bar hp"
+                      style="width:{Math.min(100, row.a.hp / 100)}%"
+                    ></span></span
+                  >
+                  <span class="num">{row.a.hp.toLocaleString()}</span>
+                  {#if row.a.damage > 0}<span class="badge dmg"
+                      >D:{row.a.damage}</span
+                    >{/if}
+                {/if}
+              </span>
+            </button>
+          {/each}
+        {/if}
+
         <!-- Buried -->
         {#if mergedBuried && mergedBuried.length > 0}
           <div class="section-label">Buried ({mergedBuried.length})</div>
@@ -346,6 +414,30 @@
           {/each}
         {/if}
 
+        {#if injuredActual.length > 0}
+          <div class="section-label">Injured ({injuredActual.length})</div>
+          {#each injuredActual as c (c.id)}
+            <button
+              class="row"
+              onclick={() => focusOn(c)}
+              class:selected={$selectedId === c.id}
+            >
+              <span class="cid" style="color:{entityColor(c.urn)}">#{c.id}</span
+              >
+              <span class="stat">
+                <span class="bar-wrap"
+                  ><span
+                    class="bar hp"
+                    style="width:{Math.min(100, c.hp / 100)}%"
+                  ></span></span
+                >
+                <span class="num">{c.hp.toLocaleString()}</span>
+              </span>
+              <span class="badge dmg">D:{c.damage}</span>
+            </button>
+          {/each}
+        {/if}
+
         {#if buriedActual.length > 0}
           <div class="section-label">Buried ({buriedActual.length})</div>
           {#each buriedActual as c (c.id)}
@@ -401,6 +493,10 @@
 
   .panel.dual {
     width: 380px;
+  }
+
+  .panel.collapsed {
+    padding-bottom: 0;
   }
 
   .panel-header {
@@ -459,7 +555,7 @@
     color: #00c8ff;
     padding: 4px 10px 2px;
   }
-  .section-label:not(:first-child) {
+  :is(.row, .dual-row) + .section-label {
     margin-top: 4px;
     border-top: 1px solid rgba(0, 200, 255, 0.1);
   }
