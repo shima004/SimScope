@@ -2,7 +2,7 @@
 
 [English](README.en.md) | Japanese
 
-![SimScope](https://github.com/user-attachments/assets/44532178-f40d-4d9c-bec3-4a4aa0079a61)
+![SimScope](https://github.com/user-attachments/assets/190ae118-fb06-408e-8b07-9e0e453af648)
 
 RoboCup Rescue Simulation (RRS) のビジュアライザです。カーネルにリアルタイム接続してシミュレーションを観察したり、ログファイルを再生したりできます。
 
@@ -120,8 +120,9 @@ http://localhost:3000/?url=https://example.com/log.7z&team=MyTeam&map=Tokyo
 - **マップ** — 建物・道路・エージェントを地図上に表示
 - **InfoPanel** — 選択したエンティティの詳細情報・通信ログ
   - **📌** — エンティティをピン留めして常に表示
-- **CivilianStatusPanel** — 市民の生存・埋没状況（ヘッダークリックで折りたたみ可）
-- **InjuredCivilianPanel** — 避難所におらず搬送状態ではない負傷市民の一覧
+- **CivilianStatusPanel** — 市民の生存・埋没・負傷状況（ヘッダークリックで折りたたみ可）
+- **IdleAgentPanel** — アクションを実行していないエージェントの一覧(ヘッダークリックで折りたたみ可)
 - **Score** — スコア
 - **Injured in refuge** — 避難所にいる負傷市民の数/総負傷市民数
 - **Blockade cleared** — 啓開された瓦礫の全体での割合
+- **Event Timeline** — 重要イベントのタイムライン表示
