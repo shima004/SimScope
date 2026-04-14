@@ -6,6 +6,7 @@
     focusPoint,
     inspectedId,
     pinnedAgentId,
+    seekToStep,
     selectedId,
     simEvents,
   } from "$lib/stores/simulation";
@@ -74,12 +75,12 @@
 
   function selectEvent(step: number, agentId: number, targetId: number) {
     selectedTargetId = targetId;
-    currentStep.set(step);
     if (get(pinnedAgentId) !== null) {
       inspectedId.set(agentId);
     } else {
       selectedId.set(agentId);
     }
+    seekToStep(step);
     const e = get(entities).get(agentId);
     if (e && "x" in e) {
       focusPoint.set({ x: (e as { x: number; y: number }).x, y: (e as { x: number; y: number }).y });
