@@ -425,6 +425,51 @@
         lineWidthMaxPixels: 3,
         pickable: false,
       }),
+
+      // AK_MOVE: 選択エージェントの移動パス
+      ...((): (PathLayer<unknown> | ScatterplotLayer<unknown>)[] => {
+        if (!selId) return [];
+        const sel = emap.get(selId) as HumanEntity | undefined;
+        if (!sel || !isAgent(sel.urn)) return [];
+        const action = actions.get(selId);
+        if (action?.urn !== CommandURN.AK_MOVE || !action.path?.length) return [];
+
+        const pts: [number, number][] = [];
+        for (const id of action.path) {
+          const e = emap.get(id);
+          if (e && "x" in e && "y" in e)
+            pts.push([(e as { x: number; y: number }).x, (e as { x: number; y: number }).y]);
+        }
+        if (pts.length < 2) return [];
+
+        const dest = pts[pts.length - 1];
+
+        return [
+          new PathLayer<[number, number][]>({
+            id: "move-path",
+            data: [pts],
+            getPath: (d) => d,
+            getColor: [80, 220, 255, 200],
+            getWidth: 300,
+            widthMinPixels: 2,
+            widthMaxPixels: 5,
+            pickable: false,
+          }) as unknown as PathLayer<unknown>,
+          new ScatterplotLayer<{ pos: [number, number] }>({
+            id: "move-dest",
+            data: [{ pos: dest }],
+            getPosition: (d) => d.pos,
+            getFillColor: [80, 220, 255, 240],
+            getLineColor: [255, 255, 255, 200],
+            getRadius: 800,
+            radiusMinPixels: 5,
+            radiusMaxPixels: 14,
+            stroked: true,
+            lineWidthMinPixels: 2,
+            pickable: false,
+          }) as unknown as ScatterplotLayer<unknown>,
+        ];
+      })(),
     ];
   }
 

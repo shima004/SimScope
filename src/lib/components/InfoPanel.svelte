@@ -122,6 +122,13 @@
                 `0x${action.urn.toString(16)}`}</span
             >
           </div>
+          {#if action.path && action.path.length > 0}
+            {@const dest = action.path[action.path.length - 1]}
+            <div class="row">
+              <span class="key">Dest</span>
+              <button class="val link" onclick={() => selectedId.set(dest)}>#{dest}</button>
+            </div>
+          {/if}
         {/if}
         {@const commStat = $agentCommStats.get(e.id)}
         {#if commStat && commStat.speak > 0}
@@ -551,6 +558,21 @@
     color: #ffc840;
     font-weight: 600;
   }
+
+  .link {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: #00c8ff;
+    font-size: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .link:hover {
+    color: #60e0ff;
+  }
+
 
   .bar.hp {
     background: #40c870;

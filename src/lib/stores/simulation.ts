@@ -95,9 +95,10 @@ export interface CommMessage {
 
 export interface AgentAction {
   urn: number;
-  target?: number; // AK_CLEAR: 対象ブロッケード entity ID
-  destX?: number; // AK_CLEAR_AREA: 中心 X
-  destY?: number; // AK_CLEAR_AREA: 中心 Y
+  target?: number;  // AK_CLEAR: 対象ブロッケード entity ID
+  destX?: number;   // AK_CLEAR_AREA: 中心 X
+  destY?: number;   // AK_CLEAR_AREA: 中心 Y
+  path?: number[];  // AK_MOVE: 通過エリア entity ID 列（末尾が目的地）
 }
 
 export const entities = writable<Map<number, SimEntity>>(new Map());
@@ -707,9 +708,11 @@ function handleLogFrame(frame: LogProtoMsg) {
       const target = cmd.components[ComponentCommandURN.Target]?.entityID;
       const destX = cmd.components[ComponentCommandURN.DestinationX]?.intValue;
       const destY = cmd.components[ComponentCommandURN.DestinationY]?.intValue;
+      const path = cmd.components[ComponentCommandURN.Path]?.entityIDList?.values;
       if (target !== undefined) action.target = target;
       if (destX !== undefined) action.destX = destX;
       if (destY !== undefined) action.destY = destY;
+      if (path && path.length > 0) action.path = path;
       actionMap.set(agentId, action);
     }
     commandTimeline.set(time, actionMap);
