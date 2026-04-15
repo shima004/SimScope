@@ -1,6 +1,6 @@
 // Background worker for parsing PERCEPTION log frames.
-// Runs off the main thread so the simulation becomes usable immediately
-// after UPDATES/COMMANDS are parsed.
+// Sends periodic progress messages so the main thread can update the progress bar,
+// then posts the full result when done.
 
 import { LogProto as LogProtoCodec } from "$lib/proto/RCRSLogProto";
 import {
@@ -19,6 +19,13 @@ export type PerceptionResult = {
   perceptionChanges: [number, [number, unknown][]][];
 };
 
+export type PerceptionWorkerMsg =
+  | { type: "progress"; done: number; total: number }
+  | ({ type: "done" } & PerceptionResult);
+
+// Send a progress update every this many entries to avoid flooding the main thread.
+const PROGRESS_EVERY = 500;
+
 self.onmessage = ({
   data,
 }: MessageEvent<{
@@ -27,13 +34,20 @@ self.onmessage = ({
 }>) => {
   const { entries, civilianIds } = data;
   const civSet = new Set(civilianIds);
+  const total = entries.length;
 
   // Accumulate results in Maps, then convert to arrays for transfer
   const percMap = new Map<number, Map<number, number[]>>();
   const commMap = new Map<number, Map<number, CommMsg[]>>();
   const changesMap = new Map<number, Map<number, unknown>>();
 
-  for (const { step, agentId, bytes } of entries) {
+  for (let i = 0; i < entries.length; i++) {
+    // Report progress periodically
+    if (i % PROGRESS_EVERY === 0) {
+      self.postMessage({ type: "progress", done: i, total } satisfies PerceptionWorkerMsg);
+    }
+
+    const { step, agentId, bytes } = entries[i];
     if (civSet.has(agentId)) continue;
 
     let frame;
@@ -82,8 +96,9 @@ self.onmessage = ({
     }
   }
 
-  // Convert nested Maps to serializable arrays
-  const result: PerceptionResult = {
+  // Convert nested Maps to serializable arrays and send the final result
+  const result: PerceptionWorkerMsg = {
+    type: "done",
     perceptionTimeline: Array.from(percMap.entries()).map(([step, m]) => [
       step,
       Array.from(m.entries()),

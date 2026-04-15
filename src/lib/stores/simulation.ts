@@ -15,7 +15,7 @@ import {
   isArea,
 } from "$lib/rcrs/urns";
 import { extract7zAllFiles } from "$lib/sevenzip";
-import type { PerceptionResult } from "$lib/stores/perception.worker";
+import type { PerceptionWorkerMsg } from "$lib/stores/perception.worker";
 import PerceptionWorker from "$lib/stores/perception.worker?worker";
 import { derived, get, writable } from "svelte/store";
 
@@ -537,7 +537,9 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   const percKeys = Array.from(files.keys()).filter((k) =>
     k.includes("/PERCEPTION/"),
   );
-  const totalFiles = updateKeys.length + commandKeys.length + percKeys.length;
+  // totalFiles will be updated once percEntries is built (percKeys may include
+  // invalid entries that get filtered out, so we can't use percKeys.length here).
+  let totalFiles = updateKeys.length + commandKeys.length + percKeys.length;
   let parsedFiles = 0;
   parseProgress.set(0);
   let lastYield = Date.now();
@@ -584,38 +586,55 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
     files.delete(k);
   }
 
-  // Start background worker — transfers Uint8Array buffers to avoid copying.
-  // Main thread continues immediately; perception data merges in when ready.
-  const percWorker = new PerceptionWorker();
-  percWorker.onmessage = (e: MessageEvent<PerceptionResult>) => {
-    const { perceptionTimeline: pt, commTimeline: ct, perceptionChanges: pc } =
-      e.data;
-    for (const [step, agents] of pt) {
-      if (!perceptionTimeline.has(step))
-        perceptionTimeline.set(step, new Map());
-      for (const [agentId, ids] of agents)
-        perceptionTimeline.get(step)!.set(agentId, ids);
-    }
-    for (const [step, agents] of ct) {
-      if (!commTimeline.has(step)) commTimeline.set(step, new Map());
-      for (const [agentId, msgs] of agents)
-        commTimeline.get(step)!.set(agentId, msgs as CommMessage[]);
-    }
-    for (const [step, agents] of pc) {
-      if (!perceptionChangesTimeline.has(step))
-        perceptionChangesTimeline.set(step, new Map());
-      for (const [agentId, changes] of agents)
-        perceptionChangesTimeline
-          .get(step)!
-          .set(agentId, changes as ChangeSetProto);
-    }
-    percWorker.terminate();
-  };
+  // Recalculate totalFiles now that we know the exact number of valid entries.
+  totalFiles = parsedFiles + percEntries.length;
+  parseProgress.set(parsedFiles / totalFiles);
 
-  percWorker.postMessage(
-    { entries: percEntries, civilianIds },
-    percEntries.map((e) => e.bytes.buffer),
-  );
+  // Run PERCEPTION parsing in a worker and await completion before making
+  // the simulation available. The worker runs on another thread so UPDATES/
+  // COMMANDS are already decoded while it works.
+  await new Promise<void>((resolve, reject) => {
+    const percWorker = new PerceptionWorker();
+    percWorker.onmessage = (e: MessageEvent<PerceptionWorkerMsg>) => {
+      const msg = e.data;
+      if (msg.type === "progress") {
+        // Map worker progress onto the PERCEPTION portion of the total bar
+        parseProgress.set((parsedFiles + msg.done) / totalFiles);
+        return;
+      }
+      // type === "done": merge results and finish
+      const { perceptionTimeline: pt, commTimeline: ct, perceptionChanges: pc } = msg;
+      for (const [step, agents] of pt) {
+        if (!perceptionTimeline.has(step))
+          perceptionTimeline.set(step, new Map());
+        for (const [agentId, ids] of agents)
+          perceptionTimeline.get(step)!.set(agentId, ids);
+      }
+      for (const [step, agents] of ct) {
+        if (!commTimeline.has(step)) commTimeline.set(step, new Map());
+        for (const [agentId, msgs] of agents)
+          commTimeline.get(step)!.set(agentId, msgs as CommMessage[]);
+      }
+      for (const [step, agents] of pc) {
+        if (!perceptionChangesTimeline.has(step))
+          perceptionChangesTimeline.set(step, new Map());
+        for (const [agentId, changes] of agents)
+          perceptionChangesTimeline
+            .get(step)!
+            .set(agentId, changes as ChangeSetProto);
+      }
+      percWorker.terminate();
+      resolve();
+    };
+    percWorker.onerror = (err) => {
+      percWorker.terminate();
+      reject(err);
+    };
+    percWorker.postMessage(
+      { entries: percEntries, civilianIds },
+      percEntries.map((e) => e.bytes.buffer),
+    );
+  });
 
   parseProgress.set(null);
 
