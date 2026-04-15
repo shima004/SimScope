@@ -347,15 +347,17 @@
     const carriedIds = new Set<number>();
 
     for (const e of emap.values()) {
-      if (isAgent(e.urn)) agents.push(e as HumanEntity);
-      else if (e.urn === EntityURN.CIVILIAN) {
-        const h = e as HumanEntity;
+      if (!isAgent(e.urn)) continue;
+      const h = e as HumanEntity;
+      // isAgent() includes CIVILIAN, so check for being carried before pushing
+      if (h.urn === EntityURN.CIVILIAN) {
         const carrier = emap.get(h.position);
         if (carrier?.urn === EntityURN.AMBULANCE_TEAM) {
           carrierMap.set(carrier.id, h);
           carriedIds.add(h.id);
         }
       }
+      agents.push(h);
     }
     const visibleAgents = agents.filter((a) => !carriedIds.has(a.id));
 
