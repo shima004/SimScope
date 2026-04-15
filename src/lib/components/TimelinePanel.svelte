@@ -238,9 +238,11 @@
   }
 
   .event-row {
-    display: flex;
+    display: grid;
+    /* connector | step | badge(fixed) | agent(fixed) | target(fixed) */
+    grid-template-columns: 12px 36px 90px 66px 66px;
     align-items: center;
-    gap: 4px;
+    column-gap: 4px;
     padding: 2px 8px 2px 4px;
     border-radius: 3px;
     transition: background 0.1s;
@@ -250,6 +252,7 @@
     border: none;
     color: inherit;
     cursor: pointer;
+    box-sizing: border-box;
   }
 
   .event-row:hover {
@@ -324,8 +327,7 @@
     font-size: 10px;
     font-variant-numeric: tabular-nums;
     color: #607080;
-    flex-shrink: 0;
-    min-width: 30px;
+    white-space: nowrap;
   }
 
   .type-badge {
@@ -336,32 +338,22 @@
     border: 1px solid;
     border-radius: 3px;
     padding: 1px 4px;
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: center;
   }
 
   .agent-id {
     font-size: 10px;
     font-variant-numeric: tabular-nums;
     color: #c8a040;
-    flex-shrink: 0;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 72px;
   }
 
   .target-id {
     font-size: 10px;
     font-variant-numeric: tabular-nums;
     color: #a060c8;
-    flex-shrink: 0;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 72px;
   }
 
   .target-id.highlighted {

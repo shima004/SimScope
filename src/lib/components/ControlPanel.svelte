@@ -142,6 +142,9 @@
     for (const [id, nextE] of next) {
       const curE = current.get(id);
       if (!curE || !("x" in curE) || !("x" in nextE)) continue;
+      // Skip interpolation when the entity is being carried (x/y reset to 0).
+      // Keep it at the current position; buildAgentLayers will hide it at step N+1.
+      if ((nextE as { x: number }).x === 0 && (nextE as { y: number }).y === 0) continue;
       const hist = (nextE as { positionHistory?: number[] }).positionHistory;
       let nx: number, ny: number;
       if (hist && hist.length >= 4) {
