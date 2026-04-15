@@ -38,6 +38,12 @@
     $simEvents.filter((e) => activeFilters.has(e.type))
   );
 
+  // Index of the first event whose step is strictly after the current step.
+  // -1 means all events are past/current (no future events visible).
+  const nowLineIndex = $derived(
+    filtered.findIndex((ev) => ev.step > $currentStep)
+  );
+
   interface RowMeta {
     inGroup: boolean;
     lineTop: boolean;
@@ -113,6 +119,11 @@
     {:else}
       {#each filtered as ev, i (ev.step + "-" + ev.type + "-" + ev.agentId + "-" + ev.targetId)}
         {@const meta = groupMeta[i]}
+        {#if i === nowLineIndex && nowLineIndex !== -1}
+          <div class="now-divider">
+            <span class="now-label">NOW</span>
+          </div>
+        {/if}
         <button
           class="event-row"
           class:current={$currentStep === ev.step}
@@ -356,6 +367,31 @@
   .target-id.highlighted {
     color: #d080e0;
     font-weight: 600;
+  }
+
+  /* ── now divider ── */
+  .now-divider {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    pointer-events: none;
+  }
+
+  .now-divider::before,
+  .now-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 200, 64, 0.45);
+  }
+
+  .now-label {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #ffc840;
+    flex-shrink: 0;
   }
 
   /* scrollbar */
