@@ -64,12 +64,9 @@ let perceptionTimeline: Map<number, Map<number, number[]>> = new Map();
 
 /**
  * Per-timestep perception entity changes — only populated in file mode.
- * Maps step → (agentId → ChangeSetProto of perceived entity states)
+ * Maps step → (agentId → raw LogProto bytes); decoded on demand in rebuildPerceivedWorld.
  */
-let perceptionChangesTimeline: Map<
-  number,
-  Map<number, ChangeSetProto>
-> = new Map();
+let perceptionChangesRaw: Map<number, Map<number, Uint8Array>> = new Map();
 
 /**
  * Per-timestep communication data — only populated in file mode.
@@ -265,11 +262,20 @@ export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
   );
 
   // 2. 知覚データを累積適用（step T+1 の PERCEPTION = step T の実世界に対応）
+  // Raw bytes are decoded on demand to avoid storing large ChangeSetProto objects.
   const seenIds = new Set<number>();
   for (let s = 1; s <= targetStep + 1; s++) {
-    const percMap = perceptionChangesTimeline.get(s);
+    const percMap = perceptionChangesRaw.get(s);
     if (!percMap) continue;
-    const percChanges = percMap.get(agentId);
+    const rawBytes = percMap.get(agentId);
+    if (!rawBytes) continue;
+    let percChanges: ChangeSetProto | undefined;
+    try {
+      const frame = LogProtoCodec.decode(rawBytes);
+      percChanges = frame.perception?.visible as ChangeSetProto | undefined;
+    } catch {
+      continue;
+    }
     if (!percChanges) continue;
     for (const c of percChanges.changes) seenIds.add(c.entityID);
     applyChanges(snapshot, percChanges);
@@ -593,43 +599,47 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   // Run PERCEPTION parsing in a worker and await completion before making
   // the simulation available. The worker runs on another thread so UPDATES/
   // COMMANDS are already decoded while it works.
-  await new Promise<void>((resolve, reject) => {
+  // Worker handles perceptionTimeline, commTimeline, and percChangesRaw (raw bytes).
+  // Bytes are transferred; percChangesRaw bytes are transferred back as Transferables.
+  await new Promise<void>((resolve) => {
     const percWorker = new PerceptionWorker();
     percWorker.onmessage = (e: MessageEvent<PerceptionWorkerMsg>) => {
       const msg = e.data;
       if (msg.type === "progress") {
-        // Map worker progress onto the PERCEPTION portion of the total bar
         parseProgress.set((parsedFiles + msg.done) / totalFiles);
         return;
       }
-      // type === "done": merge results and finish
-      const { perceptionTimeline: pt, commTimeline: ct, perceptionChanges: pc } = msg;
-      for (const [step, agents] of pt) {
+      // type === "done": merge results
+      for (const [step, agents] of msg.perceptionTimeline) {
         if (!perceptionTimeline.has(step))
           perceptionTimeline.set(step, new Map());
         for (const [agentId, ids] of agents)
           perceptionTimeline.get(step)!.set(agentId, ids);
       }
-      for (const [step, agents] of ct) {
+      for (const [step, agents] of msg.commTimeline) {
         if (!commTimeline.has(step)) commTimeline.set(step, new Map());
         for (const [agentId, msgs] of agents)
           commTimeline.get(step)!.set(agentId, msgs as CommMessage[]);
       }
-      for (const [step, agents] of pc) {
-        if (!perceptionChangesTimeline.has(step))
-          perceptionChangesTimeline.set(step, new Map());
-        for (const [agentId, changes] of agents)
-          perceptionChangesTimeline
-            .get(step)!
-            .set(agentId, changes as ChangeSetProto);
+      for (const [step, agents] of msg.percChangesRaw) {
+        if (!perceptionChangesRaw.has(step))
+          perceptionChangesRaw.set(step, new Map());
+        for (const [agentId, bytes] of agents)
+          perceptionChangesRaw.get(step)!.set(agentId, bytes);
       }
       percWorker.terminate();
       resolve();
     };
-    percWorker.onerror = (err) => {
+    percWorker.onerror = (err: ErrorEvent) => {
       percWorker.terminate();
-      reject(err);
+      console.warn(
+        "PERCEPTION worker error — continuing without perception data:",
+        err.message ?? err,
+      );
+      resolve();
     };
+    // Transfer bytes to the worker to avoid duplicating memory.
+    // Raw bytes for percChangesRaw are transferred back as Transferables.
     percWorker.postMessage(
       { entries: percEntries, civilianIds },
       percEntries.map((e) => e.bytes.buffer),
@@ -958,9 +968,16 @@ function handleLogFrame(frame: LogProtoMsg) {
         visible.changes.map((c) => c.entityID),
       );
 
-      if (!perceptionChangesTimeline.has(time))
-        perceptionChangesTimeline.set(time, new Map());
-      perceptionChangesTimeline.get(time)!.set(entityID, visible);
+      // WebSocket mode: encode visible back to bytes for on-demand decoding.
+      // (File mode populates perceptionChangesRaw via the worker result.)
+      if (!perceptionChangesRaw.has(time))
+        perceptionChangesRaw.set(time, new Map());
+      perceptionChangesRaw.get(time)!.set(
+        entityID,
+        LogProtoCodec.encode({
+          perception: { time, entityID, visible, communications: [] },
+        }).finish(),
+      );
     }
     if (communications.length > 0) {
       const msgs: CommMessage[] = [];
@@ -1015,7 +1032,7 @@ function reset() {
   timeline = new Map();
   commandTimeline = new Map();
   perceptionTimeline = new Map();
-  perceptionChangesTimeline = new Map();
+  perceptionChangesRaw = new Map();
   commTimeline = new Map();
   speakTimeline = new Map();
   agentCommTimeline = new Map();
