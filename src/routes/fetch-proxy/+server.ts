@@ -1,6 +1,10 @@
+import { env } from "$env/dynamic/public";
 import type { RequestHandler } from "@sveltejs/kit";
 
 export const GET: RequestHandler = async ({ url }) => {
+  if (env.PUBLIC_DIRECT_FETCH === "true") {
+    return new Response("Proxy is disabled (PUBLIC_DIRECT_FETCH=true)", { status: 403 });
+  }
   const target = url.searchParams.get("url");
   if (!target) {
     return new Response("Missing url parameter", { status: 400 });

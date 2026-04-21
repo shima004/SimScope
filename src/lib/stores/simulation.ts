@@ -1,3 +1,4 @@
+import { env as publicEnv } from "$env/dynamic/public";
 import { LogProto as LogProtoCodec } from "$lib/proto/RCRSLogProto";
 import type { ChangeSetProto, EntityProto } from "$lib/proto/RCRSProto";
 import {
@@ -688,10 +689,11 @@ export async function loadUrl(
   errorMsg.set(null);
   mode.set("file");
   reset();
-  // 外部URLはCORSを回避するためプロキシ経由で取得
-  const fetchUrl = url.startsWith("http")
-    ? `/fetch-proxy?url=${encodeURIComponent(url)}`
-    : url;
+  const directFetch = publicEnv.PUBLIC_DIRECT_FETCH === "true";
+  const fetchUrl =
+    !directFetch && url.startsWith("http")
+      ? `/fetch-proxy?url=${encodeURIComponent(url)}`
+      : url;
   try {
     const res = await fetch(fetchUrl);
     if (res.status === 404) {
