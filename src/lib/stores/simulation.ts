@@ -311,6 +311,8 @@ export function rebuildPerceivedWorld(targetStep: number, agentId: number) {
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
 let ws: WebSocket | null = null;
+let prevWsActions = new Map<number, AgentAction>();
+let wsAmbulanceCarrying = new Map<number, number>();
 
 export function connectWS(url: string) {
   if (ws) disconnectWS();
@@ -344,7 +346,8 @@ export function connectWS(url: string) {
       } else if (msg.type === "TIMESTEP") {
         let nextMap: Map<number, SimEntity> | null = null;
         entities.update((map) => {
-          const next = applyChanges(map, msg.changes as ChangeSetProto);
+          // 新しい Map インスタンスを作成することで deck.gl がデータ変化を検知できるようにする
+          const next = applyChanges(new Map(map), msg.changes as ChangeSetProto);
           if (msg.time === 1) {
             let totalCost = 0;
             for (const e of next.values()) {
@@ -420,6 +423,39 @@ export function connectWS(url: string) {
               return existing;
             });
           }
+
+          // WS モードのリアルタイムイベント検出
+          const newEvents: SimEvent[] = [];
+          const step = msg.time as number;
+          for (const [agentId, action] of actionMap) {
+            if (action.urn === CommandURN.AK_LOAD && action.target !== undefined) {
+              wsAmbulanceCarrying.set(agentId, action.target);
+              newEvents.push({ step, type: "carry_start", agentId, targetId: action.target });
+            } else if (action.urn === CommandURN.AK_UNLOAD) {
+              const civilianId = wsAmbulanceCarrying.get(agentId);
+              if (civilianId !== undefined) {
+                newEvents.push({ step, type: "carry_end", agentId, targetId: civilianId });
+                wsAmbulanceCarrying.delete(agentId);
+              }
+            }
+            if (action.urn === CommandURN.AK_RESCUE && action.target !== undefined) {
+              const prev = prevWsActions.get(agentId);
+              if (prev?.urn !== CommandURN.AK_RESCUE || prev.target !== action.target) {
+                newEvents.push({ step, type: "rescue_start", agentId, targetId: action.target });
+              }
+            }
+          }
+          for (const [agentId, prevAction] of prevWsActions) {
+            if (prevAction.urn !== CommandURN.AK_RESCUE || prevAction.target === undefined) continue;
+            const cur = actionMap.get(agentId);
+            if (cur?.urn !== CommandURN.AK_RESCUE || cur.target !== prevAction.target) {
+              newEvents.push({ step: step - 1, type: "rescue_end", agentId, targetId: prevAction.target });
+            }
+          }
+          if (newEvents.length > 0) {
+            simEvents.update((ev) => [...ev, ...newEvents].sort((a, b) => a.step - b.step));
+          }
+          prevWsActions = actionMap;
         }
       } else if (msg.type === "ERROR") {
         errorMsg.set(`Kernel error: ${msg.reason}`);
@@ -1056,4 +1092,6 @@ function reset() {
   pinnedAgentId.set(null);
   inspectedId.set(null);
   simEvents.set([]);
+  prevWsActions = new Map();
+  wsAmbulanceCarrying = new Map();
 }
