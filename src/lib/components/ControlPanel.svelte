@@ -34,8 +34,9 @@
       : new URLSearchParams();
   let tcpHost = $state(_q.get("host") ?? "localhost");
   let tcpPort = $state(_q.get("port") ?? "27931");
+  const wsScheme = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss" : "ws";
   const wsUrl = $derived(
-    `ws://${typeof window !== "undefined" ? window.location.host : "localhost:5173"}/proxy?host=${tcpHost}&port=${tcpPort}`,
+    `${wsScheme}://${typeof window !== "undefined" ? window.location.host : "localhost:5173"}/proxy?host=${tcpHost}&port=${tcpPort}`,
   );
   let fileInput = $state<HTMLInputElement>();
   let logUrl = $state(_q.get("url") ?? "");
