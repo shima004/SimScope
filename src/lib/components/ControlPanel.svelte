@@ -46,7 +46,7 @@
     const hasServer = _q.has("host") || _q.has("port");
     if (initialUrl) {
       const result = await loadUrl(initialUrl);
-      if (result === "not_found" && hasServer) connectWS(wsUrl);
+      if (result !== "ok" && hasServer) connectWS(wsUrl);
     } else if (hasServer) {
       connectWS(wsUrl);
     }
