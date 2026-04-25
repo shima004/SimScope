@@ -52,11 +52,16 @@
     }
   });
   let playing = $state(false);
+  let loopMode = $state(false);
+  let loopCountdown = $state<number | null>(null);
+  let loopTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let loopIntervalId: ReturnType<typeof setInterval> | null = null;
   let rafId: number | null = null;
   let stepStartTime = 0;
   let nextSnapshot: Map<number, SimEntity> | null = null;
   let playSpeed = $state(1); // steps/sec multiplier
   const SPEEDS = [0.5, 1, 2, 4, 8];
+  const LOOP_WAIT_MS = 15000;
 
   function easeInOut(t: number): number {
     return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
@@ -185,6 +190,20 @@
         if ($currentStep >= $maxStep) {
           playing = false;
           rafId = null;
+          if (loopMode) {
+            loopCountdown = LOOP_WAIT_MS / 1000;
+            loopIntervalId = setInterval(() => {
+              loopCountdown = (loopCountdown ?? 1) - 1;
+            }, 1000);
+            loopTimeoutId = setTimeout(() => {
+              clearInterval(loopIntervalId!);
+              loopIntervalId = null;
+              loopCountdown = null;
+              loopTimeoutId = null;
+              seekToStep(0);
+              startPlayback();
+            }, LOOP_WAIT_MS);
+          }
           return;
         }
         seekToStep($currentStep + 1);
@@ -212,6 +231,15 @@
       cancelAnimationFrame(rafId);
       rafId = null;
     }
+    if (loopTimeoutId !== null) {
+      clearTimeout(loopTimeoutId);
+      loopTimeoutId = null;
+    }
+    if (loopIntervalId !== null) {
+      clearInterval(loopIntervalId);
+      loopIntervalId = null;
+    }
+    loopCountdown = null;
     nextSnapshot = null;
     if (get(mode) === "file") {
       agentActions.set(getCommandsAtStep(get(currentStep)));
@@ -422,6 +450,13 @@
           disabled={$currentStep >= $maxStep}
           aria-label="1ステップ進む">⏭</button
         >
+        <button
+          class="btn icon loop"
+          class:active={loopMode}
+          onclick={() => { loopMode = !loopMode; if (!loopMode) stopPlayback(); }}
+          title={loopMode ? "ループ再生オフ" : "ループ再生オン"}
+          aria-label="ループ再生">🔁</button
+        >
         <div class="speed-btns">
           {#each SPEEDS as s}
             <button
@@ -432,6 +467,9 @@
           {/each}
         </div>
       </div>
+      {#if loopCountdown !== null}
+        <div class="loop-countdown">{loopCountdown}s でループ再開</div>
+      {/if}
     </section>
   {/if}
 
@@ -779,6 +817,20 @@
     padding: 4px 10px;
     font-size: 11px;
     border-radius: 4px;
+  }
+
+  .btn.icon.loop.active {
+    color: #00c8ff;
+    border-color: rgba(0, 200, 255, 0.6);
+    background: rgba(0, 200, 255, 0.1);
+  }
+
+  .loop-countdown {
+    font-size: 10px;
+    color: #607080;
+    text-align: center;
+    padding: 3px 0 0;
+    font-variant-numeric: tabular-nums;
   }
   .btn.icon:hover:not(:disabled) {
     background: rgba(0, 180, 255, 0.15);
