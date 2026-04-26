@@ -13,8 +13,11 @@
     downloadSize,
     extractProgress,
     loading,
+    loadUrl,
     parseProgress,
+    seekToStep,
   } from "$lib/stores/simulation";
+  import { onMount } from "svelte";
 
   function fmtBytes(b: number): string {
     if (b >= 1024 * 1024 * 1024) return `${(b / (1024 * 1024 * 1024)).toFixed(1)} GB`;
@@ -24,43 +27,65 @@
   }
 
   let timelineOpen = $state(false);
+  let screenshotMode = $state(false);
+  let dataLoaded = $state(false);
+
+  onMount(async () => {
+    const params = new URLSearchParams(window.location.search);
+    screenshotMode = params.has("screenshot");
+    const autoUrl = params.get("autoload");
+    const autoStep = params.get("step");
+    if (autoUrl) {
+      const result = await loadUrl(autoUrl);
+      if (result === "ok" && autoStep !== null) {
+        seekToStep(parseInt(autoStep, 10));
+      }
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          dataLoaded = true;
+        }),
+      );
+    }
+  });
 
   const TIMELINE_WIDTH = 300;
   const PANEL_GAP = 12;
   const leftOffset = $derived(timelineOpen ? TIMELINE_WIDTH + PANEL_GAP : 0);
 </script>
 
-<div class="app">
+<div class="app" data-loaded={dataLoaded ? "true" : undefined}>
   <SimMap />
 
-  <!-- Sliding timeline panel -->
-  <div
-    class="timeline-drawer"
-    class:open={timelineOpen}
-  >
-    <TimelinePanel />
-  </div>
+  {#if !screenshotMode}
+    <!-- Sliding timeline panel -->
+    <div
+      class="timeline-drawer"
+      class:open={timelineOpen}
+    >
+      <TimelinePanel />
+    </div>
 
-  <!-- Toggle tab -->
-  <button
-    class="timeline-toggle"
-    class:open={timelineOpen}
-    style="left:{timelineOpen ? TIMELINE_WIDTH : 0}px"
-    onclick={() => (timelineOpen = !timelineOpen)}
-    title={timelineOpen ? "Close timeline" : "Open timeline"}
-  >
-    {timelineOpen ? "◂" : "▸"}
-  </button>
+    <!-- Toggle tab -->
+    <button
+      class="timeline-toggle"
+      class:open={timelineOpen}
+      style="left:{timelineOpen ? TIMELINE_WIDTH : 0}px"
+      onclick={() => (timelineOpen = !timelineOpen)}
+      title={timelineOpen ? "Close timeline" : "Open timeline"}
+    >
+      {timelineOpen ? "◂" : "▸"}
+    </button>
 
-  <div class="left-col" style="left:{leftOffset + PANEL_GAP}px">
-    <ControlPanel />
-    <TeamNamePanel />
-    <ScorePanel />
-    <ChannelFilterPanel />
-  </div>
-  <IdleAgentsPanel leftOffset={leftOffset + PANEL_GAP} />
-  <InfoPanel />
-  <CivilianStatusPanel />
+    <div class="left-col" style="left:{leftOffset + PANEL_GAP}px">
+      <ControlPanel />
+      <TeamNamePanel />
+      <ScorePanel />
+      <ChannelFilterPanel />
+    </div>
+    <IdleAgentsPanel leftOffset={leftOffset + PANEL_GAP} />
+    <InfoPanel />
+    <CivilianStatusPanel />
+  {/if}
 
   {#if $loading}
     <div class="loading-overlay">
