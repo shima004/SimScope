@@ -75,7 +75,7 @@
   const AGENT_EMOJI: Record<number, string> = {
     [EntityURN.FIRE_BRIGADE]: "🚒",
     [EntityURN.AMBULANCE_TEAM]: "🚑",
-    [EntityURN.POLICE_FORCE]: "🚓",
+    [EntityURN.POLICE_FORCE]: "🚜",
   };
   // 市民のみ HP に応じて絵文字を変える（HP高い順）
   const CIVILIAN_EMOJI_LEVELS = ["😄", "😰", "🥵", "🤢", "👻"] as const;
