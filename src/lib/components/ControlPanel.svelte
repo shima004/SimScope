@@ -11,6 +11,7 @@
     disconnectWS,
     entities,
     errorMsg,
+    agentDisplayMode,
     followMode,
     getCommandsAtStep,
     kernelConfig,
@@ -457,6 +458,13 @@
           title={loopMode ? "ループ再生オフ" : "ループ再生オン"}
           aria-label="ループ再生">🔁</button
         >
+        <button
+          class="btn icon"
+          class:active={$agentDisplayMode === "emoji"}
+          onclick={() => agentDisplayMode.update((v) => (v === "emoji" ? "circle" : "emoji"))}
+          title={$agentDisplayMode === "emoji" ? "絵文字モード（クリックで切替）" : "Circleモード（クリックで切替）"}
+          aria-label="エージェント表示切替">{$agentDisplayMode === "emoji" ? "🚒" : "⬤"}</button
+        >
         <div class="speed-btns">
           {#each SPEEDS as s}
             <button
@@ -503,6 +511,7 @@
         onclick={() => followMode.update((v) => !v)}
         title="選択中のエージェントに追従">Follow</button
       >
+
       {#if $mode === "file"}
         <button
           class="btn follow"

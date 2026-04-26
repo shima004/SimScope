@@ -11,6 +11,7 @@
   import type { AgentAction, CommMessage } from "$lib/stores/simulation";
   import {
     agentActions,
+    agentDisplayMode,
     agentReceivedComms,
     agentVisibleIds,
     animatedEntities,
@@ -28,6 +29,7 @@
   import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
   import { Deck, OrthographicView } from "@deck.gl/core";
   import {
+    IconLayer,
     LineLayer,
     PathLayer,
     PolygonLayer,
@@ -68,6 +70,51 @@
 
     // Regular building: brokenness が 1 以上で茶色
     return e.brokenness > 0 ? [180, 120, 60, 220] : [80, 100, 140, 220];
+  }
+
+  const AGENT_EMOJI: Record<number, string> = {
+    [EntityURN.FIRE_BRIGADE]: "🚒",
+    [EntityURN.AMBULANCE_TEAM]: "🚑",
+    [EntityURN.POLICE_FORCE]: "🚜",
+    [EntityURN.CIVILIAN]: "🧍",
+  };
+  const EMOJI_FONT =
+    '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+
+  type IconMapping = Record<
+    string,
+    { x: number; y: number; width: number; height: number; mask: boolean }
+  >;
+  interface EmojiAtlas {
+    atlas: string;
+    mapping: IconMapping;
+  }
+  let _emojiAtlas: EmojiAtlas | null = null;
+
+  function getEmojiAtlas(): EmojiAtlas {
+    if (_emojiAtlas) return _emojiAtlas;
+    const SIZE = 64;
+    const emojis = [...new Set(Object.values(AGENT_EMOJI))];
+    const canvas = document.createElement("canvas");
+    canvas.width = SIZE * emojis.length;
+    canvas.height = SIZE;
+    const ctx = canvas.getContext("2d")!;
+    ctx.font = `${SIZE * 0.82}px ${EMOJI_FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const mapping: IconMapping = {};
+    emojis.forEach((emoji, i) => {
+      ctx.fillText(emoji, SIZE * i + SIZE / 2, SIZE / 2);
+      mapping[emoji] = {
+        x: SIZE * i,
+        y: 0,
+        width: SIZE,
+        height: SIZE,
+        mask: false,
+      };
+    });
+    _emojiAtlas = { atlas: canvas.toDataURL(), mapping };
+    return _emojiAtlas;
   }
 
   function agentColor(
@@ -170,8 +217,10 @@
         const dy = action.destY - agent.y;
         const len = Math.sqrt(dx * dx + dy * dy);
         if (len === 0) continue;
-        const nx = dx / len, ny = dy / len;
-        const px = -ny, py = nx;
+        const nx = dx / len,
+          ny = dy / len;
+        const px = -ny,
+          py = nx;
         const ex = agent.x + nx * clearDist;
         const ey = agent.y + ny * clearDist;
         clearAreaPolygons.push([
@@ -184,7 +233,10 @@
     }
 
     // AK_MOVE パス
-    const moveLayers = ((): (PathLayer<unknown> | ScatterplotLayer<unknown>)[] => {
+    const moveLayers = ((): (
+      | PathLayer<unknown>
+      | ScatterplotLayer<unknown>
+    )[] => {
       if (!selId) return [];
       const sel = emap.get(selId) as HumanEntity | undefined;
       if (!sel || !isAgent(sel.urn)) return [];
@@ -194,36 +246,59 @@
       for (const id of action.path) {
         const e = emap.get(id);
         if (e && "x" in e && "y" in e)
-          pts.push([(e as { x: number; y: number }).x, (e as { x: number; y: number }).y]);
+          pts.push([
+            (e as { x: number; y: number }).x,
+            (e as { x: number; y: number }).y,
+          ]);
       }
       if (pts.length < 2) return [];
       const dest = pts[pts.length - 1];
       return [
         new PathLayer<[number, number][]>({
-          id: "move-path", data: [pts], getPath: (d) => d,
-          getColor: [80, 220, 255, 200], getWidth: 300,
-          widthMinPixels: 2, widthMaxPixels: 5, pickable: false,
+          id: "move-path",
+          data: [pts],
+          getPath: (d) => d,
+          getColor: [80, 220, 255, 200],
+          getWidth: 300,
+          widthMinPixels: 2,
+          widthMaxPixels: 5,
+          pickable: false,
         }) as unknown as PathLayer<unknown>,
         new ScatterplotLayer<{ pos: [number, number] }>({
-          id: "move-dest", data: [{ pos: dest }], getPosition: (d) => d.pos,
-          getFillColor: [80, 220, 255, 240], getLineColor: [255, 255, 255, 200],
-          getRadius: 800, radiusMinPixels: 5, radiusMaxPixels: 14,
-          stroked: true, lineWidthMinPixels: 2, pickable: false,
+          id: "move-dest",
+          data: [{ pos: dest }],
+          getPosition: (d) => d.pos,
+          getFillColor: [80, 220, 255, 240],
+          getLineColor: [255, 255, 255, 200],
+          getRadius: 800,
+          radiusMinPixels: 5,
+          radiusMaxPixels: 14,
+          stroked: true,
+          lineWidthMinPixels: 2,
+          pickable: false,
         }) as unknown as ScatterplotLayer<unknown>,
       ];
     })();
 
     // 通信レイヤー
-    const commLayers = ((): (LineLayer<unknown> | ScatterplotLayer<unknown>)[] => {
+    const commLayers = ((): (
+      | LineLayer<unknown>
+      | ScatterplotLayer<unknown>
+    )[] => {
       if (!filteredComms?.length || !selId) return [];
       const sel = emap.get(selId) as HumanEntity | undefined;
       if (!sel || !isAgent(sel.urn)) return [];
       const senderChMap = new Map<number, number>();
       for (const c of filteredComms) {
         const cur = senderChMap.get(c.senderId);
-        if (cur === undefined || c.channel < cur) senderChMap.set(c.senderId, c.channel);
+        if (cur === undefined || c.channel < cur)
+          senderChMap.set(c.senderId, c.channel);
       }
-      type LineEntry = { source: [number, number]; target: [number, number]; ch: number };
+      type LineEntry = {
+        source: [number, number];
+        target: [number, number];
+        ch: number;
+      };
       type SenderEntry = { x: number; y: number; ch: number };
       const lineData: LineEntry[] = [];
       const senderData: SenderEntry[] = [];
@@ -231,73 +306,114 @@
         const sender = emap.get(sid) as HumanEntity | undefined;
         if (!sender || !isAgent(sender.urn)) continue;
         if (sender.x === 0 && sender.y === 0) continue;
-        lineData.push({ source: [sel.x, sel.y], target: [sender.x, sender.y], ch });
+        lineData.push({
+          source: [sel.x, sel.y],
+          target: [sender.x, sender.y],
+          ch,
+        });
         senderData.push({ x: sender.x, y: sender.y, ch });
       }
       return [
         new LineLayer<LineEntry>({
-          id: "comm-lines", data: lineData,
-          getSourcePosition: (d) => d.source, getTargetPosition: (d) => d.target,
-          getColor: (d) => [...channelColorRGB(d.ch), 180] as [number, number, number, number],
-          getWidth: 300, widthMinPixels: 1, widthMaxPixels: 3,
+          id: "comm-lines",
+          data: lineData,
+          getSourcePosition: (d) => d.source,
+          getTargetPosition: (d) => d.target,
+          getColor: (d) =>
+            [...channelColorRGB(d.ch), 180] as [number, number, number, number],
+          getWidth: 300,
+          widthMinPixels: 1,
+          widthMaxPixels: 3,
           updateTriggers: { getColor: [filteredComms] },
         }) as unknown as LineLayer<unknown>,
         new ScatterplotLayer<SenderEntry>({
-          id: "comm-senders", data: senderData, getPosition: (d) => [d.x, d.y],
+          id: "comm-senders",
+          data: senderData,
+          getPosition: (d) => [d.x, d.y],
           getFillColor: [0, 0, 0, 0],
-          getLineColor: (d) => [...channelColorRGB(d.ch), 255] as [number, number, number, number],
-          getRadius: 900, radiusMinPixels: 5, radiusMaxPixels: 16,
-          stroked: true, filled: false, lineWidthMinPixels: 2, lineWidthMaxPixels: 4,
-          pickable: false, updateTriggers: { getLineColor: [filteredComms] },
+          getLineColor: (d) =>
+            [...channelColorRGB(d.ch), 255] as [number, number, number, number],
+          getRadius: 900,
+          radiusMinPixels: 5,
+          radiusMaxPixels: 16,
+          stroked: true,
+          filled: false,
+          lineWidthMinPixels: 2,
+          lineWidthMaxPixels: 4,
+          pickable: false,
+          updateTriggers: { getLineColor: [filteredComms] },
         }) as unknown as ScatterplotLayer<unknown>,
       ];
     })();
 
     return [
       new PolygonLayer({
-        id: "roads", data: roads,
+        id: "roads",
+        data: roads,
         getPolygon: (d: RoadEntity) => d.apexes,
         getFillColor: (d: RoadEntity) =>
           d.urn === EntityURN.HYDRANT ? [30, 100, 140, 220] : [45, 55, 70, 200],
         getLineColor: [70, 85, 105, 255],
-        lineWidthMinPixels: 0.5, pickable: true,
-        onClick: (info: PickingInfo) => selectEntity((info.object as RoadEntity)?.id ?? null),
+        lineWidthMinPixels: 0.5,
+        pickable: true,
+        onClick: (info: PickingInfo) =>
+          selectEntity((info.object as RoadEntity)?.id ?? null),
       }),
 
       new PolygonLayer({
-        id: "buildings", data: buildings,
+        id: "buildings",
+        data: buildings,
         getPolygon: (d: BuildingEntity) => d.apexes,
         getFillColor: (d: BuildingEntity) => {
           const [r, g, b, a] = buildingColor(d);
-          if (perceivedIds && !perceivedIds.has(d.id)) return [r, g, b, Math.round(a * 0.2)];
+          if (perceivedIds && !perceivedIds.has(d.id))
+            return [r, g, b, Math.round(a * 0.2)];
           return [r, g, b, a];
         },
         getLineColor: (d: BuildingEntity) =>
-          d.id === selId ? [0, 220, 255, 255]
-          : perceivedIds?.has(d.id) ? [0, 200, 180, 200]
-          : perceivedIds ? [100, 120, 160, 50]
-          : [100, 120, 160, 180],
-        lineWidthMinPixels: 1.5, pickable: true,
-        onClick: (info: PickingInfo) => selectEntity((info.object as BuildingEntity)?.id ?? null),
+          d.id === selId
+            ? [0, 220, 255, 255]
+            : perceivedIds?.has(d.id)
+              ? [0, 200, 180, 200]
+              : perceivedIds
+                ? [100, 120, 160, 50]
+                : [100, 120, 160, 180],
+        lineWidthMinPixels: 1.5,
+        pickable: true,
+        onClick: (info: PickingInfo) =>
+          selectEntity((info.object as BuildingEntity)?.id ?? null),
         updateTriggers: {
-          getFillColor: [buildings.map((b) => b.fieryness * 100 + b.brokenness), perceivedIds],
+          getFillColor: [
+            buildings.map((b) => b.fieryness * 100 + b.brokenness),
+            perceivedIds,
+          ],
           getLineColor: [selId, perceivedIds],
         },
       }),
 
       new PolygonLayer({
-        id: "blockades", data: blockades,
+        id: "blockades",
+        data: blockades,
         getPolygon: (d: BlockadeEntity) => d.apexes,
         getFillColor: (d: BlockadeEntity) =>
-          perceivedIds && !perceivedIds.has(d.id) ? [200, 160, 40, 40] : [200, 160, 40, 200],
+          perceivedIds && !perceivedIds.has(d.id)
+            ? [200, 160, 40, 40]
+            : [200, 160, 40, 200],
         getLineColor: (d: BlockadeEntity) =>
-          d.id === selId ? [0, 220, 255, 255]
-          : perceivedIds?.has(d.id) ? [0, 200, 180, 220]
-          : clearingTargets.has(d.id) ? [255, 80, 200, 255]
-          : perceivedIds ? [240, 200, 60, 60]
-          : [240, 200, 60, 255],
-        lineWidthMinPixels: 1, lineWidthMaxPixels: 4, pickable: true,
-        onClick: (info: PickingInfo) => selectEntity((info.object as BlockadeEntity)?.id ?? null),
+          d.id === selId
+            ? [0, 220, 255, 255]
+            : perceivedIds?.has(d.id)
+              ? [0, 200, 180, 220]
+              : clearingTargets.has(d.id)
+                ? [255, 80, 200, 255]
+                : perceivedIds
+                  ? [240, 200, 60, 60]
+                  : [240, 200, 60, 255],
+        lineWidthMinPixels: 1,
+        lineWidthMaxPixels: 4,
+        pickable: true,
+        onClick: (info: PickingInfo) =>
+          selectEntity((info.object as BlockadeEntity)?.id ?? null),
         updateTriggers: {
           getFillColor: [perceivedIds],
           getLineColor: [selId, clearingTargets, perceivedIds],
@@ -314,21 +430,36 @@
           return pts;
         },
         getColor: (d: HumanEntity) => {
-          const [r, g, b] = agentColor(d.urn, actions.get(d.id), carrierMap.has(d.id), d.hp);
-          return [r, g, b, d.id === selId ? 220 : 60] as [number, number, number, number];
+          const [r, g, b] = agentColor(
+            d.urn,
+            actions.get(d.id),
+            carrierMap.has(d.id),
+            d.hp,
+          );
+          return [r, g, b, d.id === selId ? 220 : 60] as [
+            number,
+            number,
+            number,
+            number,
+          ];
         },
         getWidth: (d: HumanEntity) => (d.id === selId ? 400 : 200),
-        widthMinPixels: 1, widthMaxPixels: 4,
+        widthMinPixels: 1,
+        widthMaxPixels: 4,
         updateTriggers: { getColor: [selId], getWidth: [selId] },
       }),
 
       ...commLayers,
 
       new PolygonLayer({
-        id: "clear-area", data: clearAreaPolygons,
+        id: "clear-area",
+        data: clearAreaPolygons,
         getPolygon: (d: [number, number][]) => d,
-        getFillColor: [255, 80, 200, 30], getLineColor: [255, 80, 200, 220],
-        lineWidthMinPixels: 1, lineWidthMaxPixels: 3, pickable: false,
+        getFillColor: [255, 80, 200, 30],
+        getLineColor: [255, 80, 200, 220],
+        lineWidthMinPixels: 1,
+        lineWidthMaxPixels: 3,
+        pickable: false,
       }),
 
       ...moveLayers,
@@ -339,8 +470,8 @@
   function buildAgentLayers(
     emap: Map<number, SimEntity>,
     selId: number | null,
-    actions: Map<number, AgentAction>,
     perceivedIds: Set<number> | null,
+    displayMode: "circle" | "emoji" = "emoji",
   ) {
     const agents: HumanEntity[] = [];
     const carrierMap = new Map<number, HumanEntity>();
@@ -349,7 +480,6 @@
     for (const e of emap.values()) {
       if (!isAgent(e.urn)) continue;
       const h = e as HumanEntity;
-      // isAgent() includes CIVILIAN, so check for being carried before pushing
       if (h.urn === EntityURN.CIVILIAN) {
         const carrier = emap.get(h.position);
         if (carrier?.urn === EntityURN.AMBULANCE_TEAM) {
@@ -360,30 +490,94 @@
       agents.push(h);
     }
     const visibleAgents = agents.filter((a) => !carriedIds.has(a.id));
+    const civilians = visibleAgents.filter((a) => a.urn === EntityURN.CIVILIAN);
+    const rescueAgents = visibleAgents.filter(
+      (a) => a.urn !== EntityURN.CIVILIAN,
+    );
 
-    return [
+    if (displayMode === "emoji") {
+      const { atlas, mapping } = getEmojiAtlas();
+      const emojiLayer = (id: string, data: HumanEntity[]) =>
+        new IconLayer({
+          id,
+          data,
+          getPosition: (d: HumanEntity) => [d.x, d.y],
+          getIcon: (d: HumanEntity) => AGENT_EMOJI[d.urn] ?? "🧑",
+          getSize: (d: HumanEntity) => (d.id === selId ? 28 : 20),
+          getColor: (d: HumanEntity) => {
+            const dim =
+              perceivedIds && !perceivedIds.has(d.id) && d.id !== selId;
+            return [255, 255, 255, dim ? 60 : 255];
+          },
+          sizeMinPixels: 10,
+          sizeMaxPixels: 32,
+          iconAtlas: atlas,
+          iconMapping: mapping,
+          pickable: true,
+          onClick: (info: PickingInfo) =>
+            selectEntity((info.object as HumanEntity)?.id ?? null),
+          updateTriggers: { getSize: [selId], getColor: [perceivedIds] },
+        });
+      return [
+        emojiLayer("civilians-emoji", civilians),
+        emojiLayer("rescue-agents-emoji", rescueAgents),
+        new IconLayer({
+          id: "passengers-emoji",
+          data: visibleAgents.filter((a) => carrierMap.has(a.id)),
+          getPosition: (d: HumanEntity) => [d.x, d.y],
+          getIcon: () => "🧑",
+          getSize: (d: HumanEntity) => (d.id === selId ? 18 : 13),
+          getColor: [255, 255, 255, 220],
+          sizeMinPixels: 6,
+          sizeMaxPixels: 20,
+          iconAtlas: atlas,
+          iconMapping: mapping,
+          pickable: false,
+          updateTriggers: { getSize: [selId] },
+        }),
+      ];
+    }
+
+    // circle モード（従来）
+    const circleLayer = (id: string, data: HumanEntity[]) =>
       new ScatterplotLayer({
-        id: "agents", data: visibleAgents,
+        id,
+        data,
         getPosition: (d: HumanEntity) => [d.x, d.y],
         getFillColor: (d: HumanEntity) => {
-          const [r, g, b, a] = agentColor(d.urn, actions.get(d.id), carrierMap.has(d.id), d.hp);
-          if (perceivedIds && !perceivedIds.has(d.id) && d.id !== selId) return [r, g, b, 40];
+          const [r, g, b, a] = agentColor(
+            d.urn,
+            undefined,
+            carrierMap.has(d.id),
+            d.hp,
+          );
+          if (perceivedIds && !perceivedIds.has(d.id) && d.id !== selId)
+            return [r, g, b, 40];
           return [r, g, b, a];
         },
         getRadius: (d: HumanEntity) => (d.id === selId ? 800 : 500),
-        radiusMinPixels: 3, radiusMaxPixels: 12, pickable: true,
-        onClick: (info: PickingInfo) => selectEntity((info.object as HumanEntity)?.id ?? null),
-        updateTriggers: { getRadius: [selId], getFillColor: [actions, perceivedIds] },
-      }),
-
+        radiusMinPixels: 3,
+        radiusMaxPixels: 12,
+        pickable: true,
+        onClick: (info: PickingInfo) =>
+          selectEntity((info.object as HumanEntity)?.id ?? null),
+        updateTriggers: { getRadius: [selId], getFillColor: [perceivedIds] },
+      });
+    return [
+      circleLayer("civilians-circle", civilians),
+      circleLayer("rescue-agents-circle", rescueAgents),
       new ScatterplotLayer({
-        id: "passengers",
+        id: "passengers-circle",
         data: visibleAgents.filter((a) => carrierMap.has(a.id)),
         getPosition: (d: HumanEntity) => [d.x, d.y],
-        getFillColor: [60, 200, 80, 220], getLineColor: [255, 255, 255, 180],
+        getFillColor: [60, 200, 80, 220],
+        getLineColor: [255, 255, 255, 180],
         getRadius: (d: HumanEntity) => (d.id === selId ? 400 : 250),
-        radiusMinPixels: 2, radiusMaxPixels: 7,
-        stroked: true, lineWidthMinPixels: 1, pickable: false,
+        radiusMinPixels: 2,
+        radiusMaxPixels: 7,
+        stroked: true,
+        lineWidthMinPixels: 1,
+        pickable: false,
         updateTriggers: { getRadius: [selId] },
       }),
     ];
@@ -486,7 +680,15 @@
 
   const unsubStatic = staticArgs.subscribe(
     ({ emap, selId, actions, cfg, perceivedIds, comms, hiddenChs }) => {
-      cachedStaticLayers = buildStaticLayers(emap, selId, actions, cfg, perceivedIds, comms, hiddenChs);
+      cachedStaticLayers = buildStaticLayers(
+        emap,
+        selId,
+        actions,
+        cfg,
+        perceivedIds,
+        comms,
+        hiddenChs,
+      );
       flushLayers();
       followAgent(emap, selId);
     },
@@ -494,19 +696,35 @@
 
   // 動的レイヤー: animatedEntities が更新されるたびに再構築（補間フレーム含む）
   const agentArgs = derived(
-    [animatedEntities, selectedId, agentActions, agentVisibleIds, perceptionViewMode, perceivedEntities],
-    ([$ae, $sel, $aa, $avi, $pvm, $pe]) => ({
+    [
+      animatedEntities,
+      selectedId,
+      agentActions,
+      agentVisibleIds,
+      perceptionViewMode,
+      perceivedEntities,
+      agentDisplayMode,
+    ],
+    ([$ae, $sel, $aa, $avi, $pvm, $pe, $adm]) => ({
       emap: $pvm ? $pe : $ae,
       selId: $sel,
       actions: $aa,
       perceivedIds: $avi,
+      displayMode: $adm,
     }),
   );
 
-  const unsubAgents = agentArgs.subscribe(({ emap, selId, actions, perceivedIds }) => {
-    cachedAgentLayers = buildAgentLayers(emap, selId, actions, perceivedIds);
-    flushLayers();
-  });
+  const unsubAgents = agentArgs.subscribe(
+    ({ emap, selId, perceivedIds, displayMode }) => {
+      cachedAgentLayers = buildAgentLayers(
+        emap,
+        selId,
+        perceivedIds,
+        displayMode,
+      );
+      flushLayers();
+    },
+  );
 
   // 実世界エンティティが初めてロードされたときにビューポートをフィット
   const unsubFit = entities.subscribe((emap) => {

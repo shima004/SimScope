@@ -182,6 +182,9 @@ export const agentReceivedComms = writable<CommMessage[] | null>(null);
  */
 export const perceptionViewMode = writable(false);
 
+/** エージェントの描画モード: 'circle' = 従来の丸、'emoji' = 絵文字アイコン */
+export const agentDisplayMode = writable<"circle" | "emoji">("circle");
+
 /**
  * 知覚ビューで使うエンティティマップ（選択エージェントの累積知覚から再構築）。
  */
