@@ -31,6 +31,8 @@ export const connected = writable(false);
 export const loading = writable(false);
 /** URLダウンロードの進捗 (0〜1)。ダウンロード中以外は null */
 export const downloadProgress = writable<number | null>(null);
+/** URLダウンロードのファイルサイズ (bytes)。不明または非ダウンロード中は null */
+export const downloadSize = writable<number | null>(null);
 /** ログパース進捗 (0〜1)。パース中以外は null */
 export const parseProgress = writable<number | null>(null);
 /** 7z解凍進捗 (0〜100)。解凍中以外は null */
@@ -747,6 +749,7 @@ export async function loadUrl(
     const chunks: Uint8Array[] = [];
     let received = 0;
     downloadProgress.set(contentLength > 0 ? 0 : -1);
+    downloadSize.set(contentLength > 0 ? contentLength : null);
 
     while (true) {
       const { done, value } = await reader.read();
@@ -758,6 +761,7 @@ export async function loadUrl(
     }
 
     downloadProgress.set(null);
+    downloadSize.set(null);
 
     // チャンクを結合して ArrayBuffer に変換
     const total = new Uint8Array(received);
@@ -772,6 +776,7 @@ export async function loadUrl(
     return "ok";
   } catch (e) {
     downloadProgress.set(null);
+    downloadSize.set(null);
     errorMsg.set(`Failed to load URL: ${e}`);
     mode.set("idle");
     return "error";
