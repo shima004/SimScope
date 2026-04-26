@@ -75,9 +75,24 @@
   const AGENT_EMOJI: Record<number, string> = {
     [EntityURN.FIRE_BRIGADE]: "🚒",
     [EntityURN.AMBULANCE_TEAM]: "🚑",
-    [EntityURN.POLICE_FORCE]: "🚜",
-    [EntityURN.CIVILIAN]: "🧍",
+    [EntityURN.POLICE_FORCE]: "🚓",
   };
+  // 市民のみ HP に応じて絵文字を変える（HP高い順）
+  const CIVILIAN_EMOJI_LEVELS = ["😄", "😰", "🥵", "🤢", "👻"] as const;
+
+  function getAgentEmoji(urn: number, hp: number): string {
+    if (urn === EntityURN.CIVILIAN) {
+      const n = CIVILIAN_EMOJI_LEVELS.length;
+      if (hp >= 10000) return CIVILIAN_EMOJI_LEVELS[0];
+      if (hp <= 0) return CIVILIAN_EMOJI_LEVELS[n - 1];
+      // 中間の絵文字を均等分割（インデックス 1 〜 n-2）
+      const mid = n - 2;
+      const t = hp / 10000;
+      const idx = 1 + Math.min(mid - 1, Math.floor((1 - t) * mid));
+      return CIVILIAN_EMOJI_LEVELS[idx];
+    }
+    return AGENT_EMOJI[urn] ?? "🧑";
+  }
   const EMOJI_FONT =
     '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
@@ -94,7 +109,12 @@
   function getEmojiAtlas(): EmojiAtlas {
     if (_emojiAtlas) return _emojiAtlas;
     const SIZE = 64;
-    const emojis = [...new Set(Object.values(AGENT_EMOJI))];
+    const emojis: string[] = [
+      ...new Set([
+        ...Object.values(AGENT_EMOJI),
+        ...(CIVILIAN_EMOJI_LEVELS as readonly string[]),
+      ]),
+    ];
     const canvas = document.createElement("canvas");
     canvas.width = SIZE * emojis.length;
     canvas.height = SIZE;
@@ -103,7 +123,7 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const mapping: IconMapping = {};
-    emojis.forEach((emoji, i) => {
+    emojis.forEach((emoji: string, i: number) => {
       ctx.fillText(emoji, SIZE * i + SIZE / 2, SIZE / 2);
       mapping[emoji] = {
         x: SIZE * i,
@@ -502,12 +522,12 @@
           id,
           data,
           getPosition: (d: HumanEntity) => [d.x, d.y],
-          getIcon: (d: HumanEntity) => AGENT_EMOJI[d.urn] ?? "🧑",
+          getIcon: (d: HumanEntity) => getAgentEmoji(d.urn, d.hp ?? 10000),
           getSize: (d: HumanEntity) => (d.id === selId ? 28 : 20),
           getColor: (d: HumanEntity) => {
             const dim =
               perceivedIds && !perceivedIds.has(d.id) && d.id !== selId;
-            return [255, 255, 255, dim ? 60 : 255];
+            return dim ? [255, 255, 255, 50] : [255, 255, 255, 255];
           },
           sizeMinPixels: 10,
           sizeMaxPixels: 32,
