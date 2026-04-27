@@ -14,10 +14,12 @@
     extractProgress,
     loading,
     loadUrl,
+    maxStep,
     parseProgress,
     seekToStep,
   } from "$lib/stores/simulation";
   import { onMount } from "svelte";
+  import { get } from "svelte/store";
 
   function fmtBytes(b: number): string {
     if (b >= 1024 * 1024 * 1024) return `${(b / (1024 * 1024 * 1024)).toFixed(1)} GB`;
@@ -46,10 +48,9 @@
         }),
       );
     }
-    // CLI スナップショット用: seekToStep を window 経由で公開
-    (window as unknown as Record<string, unknown>).__simscope_seekTo = (step: number) => {
-      seekToStep(step);
-    };
+    // CLI スナップショット用
+    (window as unknown as Record<string, unknown>).__simscope_seekTo = (step: number) => seekToStep(step);
+    (window as unknown as Record<string, unknown>).__simscope_maxStep = () => get(maxStep);
   });
 
   const TIMELINE_WIDTH = 300;

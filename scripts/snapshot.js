@@ -45,21 +45,28 @@ const { values, positionals } = parseArgs({
 });
 
 // ── Step spec parser ───────────────────────────────────────────────────────
+// 終端省略 (例: "0-:10") は open-ended とみなす
 function parseSteps(spec) {
-  const steps = new Set();
+  const allSteps = new Set();
+  let openEnded = false;
+
   for (const part of spec.split(",")) {
-    const rangeMatch = part.match(/^(\d+)-(\d+)(?::(\d+))?$/);
+    const rangeMatch = part.match(/^(\d+)-(\d*)(?::(\d+))?$/);
     if (rangeMatch) {
-      const from = parseInt(rangeMatch[1], 10);
-      const to   = parseInt(rangeMatch[2], 10);
-      const inc  = parseInt(rangeMatch[3] ?? "1", 10);
-      for (let s = from; s <= to; s += inc) steps.add(s);
+      const from  = parseInt(rangeMatch[1], 10);
+      const toStr = rangeMatch[2];
+      const inc   = parseInt(rangeMatch[3] ?? "1", 10);
+      const to    = toStr ? parseInt(toStr, 10) : 99999;
+      if (!toStr) openEnded = true;
+      for (let s = from; s <= to; s += inc) allSteps.add(s);
     } else {
       const n = parseInt(part.trim(), 10);
-      if (!isNaN(n)) steps.add(n);
+      if (!isNaN(n)) allSteps.add(n);
     }
   }
-  return [...steps].sort((a, b) => a - b);
+
+  const sorted = [...allSteps].sort((a, b) => a - b);
+  return { sorted, openEnded };
 }
 
 // ── Validation ─────────────────────────────────────────────────────────────
@@ -73,8 +80,8 @@ if (!values.step) {
   process.exit(1);
 }
 
-const steps = parseSteps(values.step);
-if (steps.length === 0) {
+const { sorted: rawSteps, openEnded } = parseSteps(values.step);
+if (rawSteps.length === 0) {
   console.error("No valid steps parsed from --step");
   process.exit(1);
 }
@@ -85,8 +92,8 @@ if (!existsSync(logPath)) {
   process.exit(1);
 }
 
-// 出力パステンプレート
-const multiStep = steps.length > 1;
+// 出力パステンプレート（実際の steps は後で確定）
+const multiStep = rawSteps.length > 1 || openEnded;
 const outputTemplate = values.output ?? (multiStep ? "screenshot_{step}.png" : "screenshot.png");
 function outputPath(step) {
   const pad = String(step).padStart(4, "0");
@@ -165,7 +172,7 @@ await page.setViewportSize({ width: w, height: h });
 // 初回ロード（最初のステップでページを開く）
 const qs = new URLSearchParams({
   autoload: fileUrl,
-  step: String(steps[0]),
+  step: String(rawSteps[0]),
   ...(values["no-ui"] ? { screenshot: "true" } : {}),
 });
 console.log(`Loading ${logPath}…`);
@@ -173,10 +180,19 @@ await page.goto(`http://127.0.0.1:${appPort}/?${qs}`);
 await page.waitForSelector('.app[data-loaded="true"]', { timeout: 120_000 });
 await page.waitForTimeout(1000);
 
+// actualMax を取得してステップリストを確定
+const actualMax = await page.evaluate(() => window.__simscope_maxStep());
+let steps = rawSteps.filter((s) => s <= actualMax);
+// 範囲がactualMaxを超えていた場合、末尾に actualMax を追加
+if ((openEnded || rawSteps.at(-1) > actualMax) && !steps.includes(actualMax)) {
+  steps.push(actualMax);
+}
+console.log(`Max step: ${actualMax} / Capturing ${steps.length} step(s)`);
+
 // ── Capture each step ──────────────────────────────────────────────────────
 for (const step of steps) {
   // 2ステップ目以降は seekTo で移動
-  if (step !== steps[0]) {
+  if (step !== rawSteps[0]) {
     await page.evaluate((s) => window.__simscope_seekTo(s), step);
     await page.waitForTimeout(500);
   }
