@@ -46,6 +46,10 @@
         }),
       );
     }
+    // CLI スナップショット用: seekToStep を window 経由で公開
+    (window as unknown as Record<string, unknown>).__simscope_seekTo = (step: number) => {
+      seekToStep(step);
+    };
   });
 
   const TIMELINE_WIDTH = 300;
