@@ -2,6 +2,7 @@
   "name": "simscope",
   "private": true,
   "version": "1.0.21",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
