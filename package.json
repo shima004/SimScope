@@ -4,6 +4,9 @@
   "version": "1.0.22",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "npm": ">=11.10.0"
+  },
   "scripts": {
     "dev": "vite dev",
     "start": "node server.js",
