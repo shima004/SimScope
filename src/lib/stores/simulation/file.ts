@@ -4,29 +4,24 @@ import { applyChanges, readDelimitedFrames } from "$lib/rcrs/decoder";
 import type { SimEntity } from "$lib/rcrs/types";
 import { EntityURN } from "$lib/rcrs/urns";
 import { extract7zAllFiles } from "$lib/sevenzip";
-import type { PerceptionWorkerMsg } from "$lib/stores/perception.worker";
-import PerceptionWorker from "$lib/stores/perception.worker?worker";
+import type { PerceptionWorkerMsg } from "./worker";
+import PerceptionWorker from "./worker?worker";
+import { sim } from "./data";
+import { handleLogFrame } from "./frame";
+import { resetSimulationState } from "./reset";
+import { computeSimEvents, rebuildState } from "./timeline";
 import {
-  baseEntities,
-  commTimeline,
-  computeSimEvents,
   currentStep,
   downloadProgress,
   downloadSize,
   errorMsg,
   extractProgress,
-  handleLogFrame,
   initialBlockadeCost,
   loading,
   mode,
   parseProgress,
-  perceptionChangesRaw,
-  perceptionTimeline,
-  rebuildState,
-  resetSimulationState,
-  timeline,
   type CommMessage,
-} from "$lib/stores/simulation";
+} from "./state";
 
 async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   extractProgress.set(0);
@@ -44,7 +39,6 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   });
   extractProgress.set(null);
 
-  // .xz/.lzma: single raw RCRS log (delimited LogProto frame stream)
   const rawLog = files.get("__raw_log__");
   if (rawLog) {
     parseProgress.set(0);
@@ -54,14 +48,12 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
       (pos, total) => parseProgress.set(pos / total),
     )) {
       const msg = LogProtoCodec.decode(frame);
-      // Discard civilian PERCEPTION frames before handleLogFrame to save memory
       if (
         msg.perception !== undefined &&
-        baseEntities.get(msg.perception.entityID)?.urn === EntityURN.CIVILIAN
+        sim.baseEntities.get(msg.perception.entityID)?.urn === EntityURN.CIVILIAN
       )
         continue;
       handleLogFrame(msg);
-      // Yield to the browser periodically so the UI can re-render
       if (Date.now() - lastYield > 16) {
         await new Promise<void>((r) => setTimeout(r, 0));
         lastYield = Date.now();
@@ -71,22 +63,18 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
     return;
   }
 
-  // INITIAL_CONDITIONS may be at top level or inside a subdirectory (e.g. rescue.log/)
   const configKey = Array.from(files.keys()).find((k) => k.endsWith("CONFIG"));
   if (configKey) {
     handleLogFrame(LogProtoCodec.decode(files.get(configKey)!));
     files.delete(configKey);
   }
 
-  const initialKey = Array.from(files.keys()).find((k) =>
-    k.endsWith("INITIAL_CONDITIONS"),
-  );
+  const initialKey = Array.from(files.keys()).find((k) => k.endsWith("INITIAL_CONDITIONS"));
   if (initialKey) {
     handleLogFrame(LogProtoCodec.decode(files.get(initialKey)!));
     files.delete(initialKey);
   }
 
-  // Collect all N/UPDATES and N/COMMANDS entries and process in numeric order
   function collectStepFiles(suffix: string) {
     return Array.from(files.keys())
       .filter((k) => k.endsWith(suffix))
@@ -101,17 +89,13 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
 
   const updateKeys = collectStepFiles("/UPDATES");
   const commandKeys = collectStepFiles("/COMMANDS");
-  const percKeys = Array.from(files.keys()).filter((k) =>
-    k.includes("/PERCEPTION/"),
-  );
-  // totalFiles will be updated once percEntries is built (percKeys may include
-  // invalid entries that get filtered out, so we can't use percKeys.length here).
+  const percKeys = Array.from(files.keys()).filter((k) => k.includes("/PERCEPTION/"));
+
   let totalFiles = updateKeys.length + commandKeys.length + percKeys.length;
   let parsedFiles = 0;
   parseProgress.set(0);
   let lastYield = Date.now();
 
-  // Helper to yield to the browser if more than ~16ms has passed
   async function maybeYield() {
     if (Date.now() - lastYield > 16) {
       await new Promise<void>((r) => setTimeout(r, 0));
@@ -133,14 +117,11 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
     await maybeYield();
   }
 
-  // N/PERCEPTION/agentId 形式のファイルを Worker でバックグラウンドパース。
-  // メインスレッドはすぐに続行し、UPDATES/COMMANDS パース後にシミュを利用可能にする。
-  const civilianIds = Array.from(baseEntities.entries())
+  const civilianIds = Array.from(sim.baseEntities.entries())
     .filter(([, e]) => e.urn === EntityURN.CIVILIAN)
     .map(([id]) => id);
 
-  const percEntries: { step: number; agentId: number; bytes: Uint8Array }[] =
-    [];
+  const percEntries: { step: number; agentId: number; bytes: Uint8Array }[] = [];
   for (const k of percKeys) {
     const parts = k.split("/");
     const percIdx = parts.indexOf("PERCEPTION");
@@ -153,31 +134,24 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
     files.delete(k);
   }
 
-  // Recalculate totalFiles now that we know the exact number of valid entries.
   totalFiles = parsedFiles + percEntries.length;
   parseProgress.set(parsedFiles / totalFiles);
 
-  // Run PERCEPTION parsing in a worker and await completion before making
-  // the simulation available. The worker runs on another thread so UPDATES/
-  // COMMANDS are already decoded while it works.
   await parsePerceptionEntries(percEntries, civilianIds, parsedFiles, totalFiles);
-
   finishFileLoad();
 }
 
 function finishFileLoad() {
   parseProgress.set(null);
 
-  // ステップ1のスナップショットから瓦礫の初期 repairCost 合計を計算
   const step1 = new Map<number, SimEntity>(
-    Array.from(baseEntities.entries()).map(([k, v]) => [k, { ...v }]),
+    Array.from(sim.baseEntities.entries()).map(([k, v]) => [k, { ...v }]),
   );
-  const step1changes = timeline.get(1);
+  const step1changes = sim.timeline.get(1);
   if (step1changes) applyChanges(step1, step1changes);
   let totalCost = 0;
   for (const e of step1.values()) {
-    if ("repairCost" in e)
-      totalCost += (e as { repairCost: number }).repairCost;
+    if ("repairCost" in e) totalCost += (e as { repairCost: number }).repairCost;
   }
   initialBlockadeCost.set(totalCost);
 
@@ -200,36 +174,29 @@ function parsePerceptionEntries(
         parseProgress.set((parsedFiles + msg.done) / totalFiles);
         return;
       }
-      // type === "done": merge results
       for (const [step, agents] of msg.perceptionTimeline) {
-        if (!perceptionTimeline.has(step)) perceptionTimeline.set(step, new Map());
+        if (!sim.perceptionTimeline.has(step)) sim.perceptionTimeline.set(step, new Map());
         for (const [agentId, ids] of agents)
-          perceptionTimeline.get(step)!.set(agentId, ids);
+          sim.perceptionTimeline.get(step)!.set(agentId, ids);
       }
       for (const [step, agents] of msg.commTimeline) {
-        if (!commTimeline.has(step)) commTimeline.set(step, new Map());
+        if (!sim.commTimeline.has(step)) sim.commTimeline.set(step, new Map());
         for (const [agentId, msgs] of agents)
-          commTimeline.get(step)!.set(agentId, msgs as CommMessage[]);
+          sim.commTimeline.get(step)!.set(agentId, msgs as CommMessage[]);
       }
       for (const [step, agents] of msg.percChangesRaw) {
-        if (!perceptionChangesRaw.has(step))
-          perceptionChangesRaw.set(step, new Map());
+        if (!sim.perceptionChangesRaw.has(step)) sim.perceptionChangesRaw.set(step, new Map());
         for (const [agentId, bytes] of agents)
-          perceptionChangesRaw.get(step)!.set(agentId, bytes);
+          sim.perceptionChangesRaw.get(step)!.set(agentId, bytes);
       }
       percWorker.terminate();
       resolve();
     };
     percWorker.onerror = (err: ErrorEvent) => {
       percWorker.terminate();
-      console.warn(
-        "PERCEPTION worker error — continuing without perception data:",
-        err.message ?? err,
-      );
+      console.warn("PERCEPTION worker error — continuing without perception data:", err.message ?? err);
       resolve();
     };
-    // Transfer bytes to the worker to avoid duplicating memory.
-    // Raw bytes for percChangesRaw are transferred back as Transferables.
     percWorker.postMessage(
       { entries: percEntries, civilianIds },
       percEntries.map((e) => e.bytes.buffer),
@@ -252,9 +219,7 @@ export async function loadFile(file: File) {
   }
 }
 
-export async function loadUrl(
-  url: string,
-): Promise<"ok" | "not_found" | "error"> {
+export async function loadUrl(url: string): Promise<"ok" | "not_found" | "error"> {
   loading.set(true);
   errorMsg.set(null);
   mode.set("file");
@@ -272,11 +237,7 @@ export async function loadUrl(
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    // Content-Length があれば進捗を表示、なければ不確定プログレス
-    const contentLength = parseInt(
-      res.headers.get("Content-Length") ?? "0",
-      10,
-    );
+    const contentLength = parseInt(res.headers.get("Content-Length") ?? "0", 10);
     const reader = res.body!.getReader();
     const chunks: Uint8Array[] = [];
     let received = 0;
@@ -288,14 +249,12 @@ export async function loadUrl(
       if (done) break;
       chunks.push(value);
       received += value.length;
-      if (contentLength > 0)
-        downloadProgress.set(Math.min(1, received / contentLength));
+      if (contentLength > 0) downloadProgress.set(Math.min(1, received / contentLength));
     }
 
     downloadProgress.set(null);
     downloadSize.set(null);
 
-    // チャンクを結合して ArrayBuffer に変換
     const total = new Uint8Array(received);
     let offset = 0;
     for (const chunk of chunks) {

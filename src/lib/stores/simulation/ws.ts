@@ -20,7 +20,7 @@ import {
   simEvents,
   type AgentAction,
   type SimEvent,
-} from "$lib/stores/simulation";
+} from "./state";
 
 type WsCommand = {
   agentId: number;
@@ -54,9 +54,7 @@ export function connectWS(url: string) {
     return;
   }
 
-  ws.onopen = () => {
-    connected.set(true);
-  };
+  ws.onopen = () => connected.set(true);
 
   ws.onmessage = ({ data }: MessageEvent<string>) => {
     try {
@@ -75,13 +73,11 @@ export function connectWS(url: string) {
       } else if (msg.type === "TIMESTEP") {
         let nextMap: Map<number, SimEntity> | null = null;
         entities.update((map) => {
-          // 新しい Map インスタンスを作成することで deck.gl がデータ変化を検知できるようにする
           const next = applyChanges(new Map(map), msg.changes as ChangeSetProto);
           if (msg.time === 1) {
             let totalCost = 0;
             for (const e of next.values()) {
-              if ("repairCost" in e)
-                totalCost += (e as { repairCost: number }).repairCost;
+              if ("repairCost" in e) totalCost += (e as { repairCost: number }).repairCost;
             }
             initialBlockadeCost.set(totalCost);
           }
@@ -107,11 +103,7 @@ export function connectWS(url: string) {
     const wasConnected = get(mode) === "ws";
     connected.set(false);
     mode.set("idle");
-    if (!wasConnected) {
-      errorMsg.set("Connection failed");
-    } else {
-      errorMsg.set("Disconnected from server");
-    }
+    errorMsg.set(wasConnected ? "Disconnected from server" : "Connection failed");
   };
 }
 
@@ -131,34 +123,19 @@ function handleWsCommands(step: number, commands: WsCommand[]) {
   const subMap = new Map<number, number[]>();
 
   for (const c of commands) {
-    const {
-      agentId,
-      urn,
-      target,
-      destX,
-      destY,
-      channel,
-      messageBytes,
-      channels,
-    } = c;
+    const { agentId, urn, target, destX, destY, channel, messageBytes, channels } = c;
     if (urn === CommandURN.AK_SPEAK) {
       const cur = commMap.get(agentId) ?? { speak: 0, bytes: 0 };
-      commMap.set(agentId, {
-        speak: cur.speak + 1,
-        bytes: cur.bytes + (messageBytes ?? 0),
-      });
+      commMap.set(agentId, { speak: cur.speak + 1, bytes: cur.bytes + (messageBytes ?? 0) });
       if (channel !== undefined) {
         const cs = speakMap.get(channel) ?? { count: 0, bytes: 0 };
-        speakMap.set(channel, {
-          count: cs.count + 1,
-          bytes: cs.bytes + (messageBytes ?? 0),
-        });
+        speakMap.set(channel, { count: cs.count + 1, bytes: cs.bytes + (messageBytes ?? 0) });
       }
       continue;
     }
     if (urn === CommandURN.AK_SAY || urn === CommandURN.AK_TELL) continue;
     if (urn === CommandURN.AK_SUBSCRIBE) {
-      if (channels && channels.length > 0) subMap.set(agentId, channels);
+      if (channels?.length) subMap.set(agentId, channels);
       continue;
     }
     const action: AgentAction = { urn };
@@ -187,61 +164,29 @@ function detectWsEvents(step: number, actionMap: Map<number, AgentAction>) {
   for (const [agentId, action] of actionMap) {
     if (action.urn === CommandURN.AK_LOAD && action.target !== undefined) {
       wsAmbulanceCarrying.set(agentId, action.target);
-      newEvents.push({
-        step,
-        type: "carry_start",
-        agentId,
-        targetId: action.target,
-      });
+      newEvents.push({ step, type: "carry_start", agentId, targetId: action.target });
     } else if (action.urn === CommandURN.AK_UNLOAD) {
       const civilianId = wsAmbulanceCarrying.get(agentId);
       if (civilianId !== undefined) {
-        newEvents.push({
-          step,
-          type: "carry_end",
-          agentId,
-          targetId: civilianId,
-        });
+        newEvents.push({ step, type: "carry_end", agentId, targetId: civilianId });
         wsAmbulanceCarrying.delete(agentId);
       }
     }
     if (action.urn === CommandURN.AK_RESCUE && action.target !== undefined) {
       const prev = prevWsActions.get(agentId);
-      if (
-        prev?.urn !== CommandURN.AK_RESCUE ||
-        prev.target !== action.target
-      ) {
-        newEvents.push({
-          step,
-          type: "rescue_start",
-          agentId,
-          targetId: action.target,
-        });
+      if (prev?.urn !== CommandURN.AK_RESCUE || prev.target !== action.target) {
+        newEvents.push({ step, type: "rescue_start", agentId, targetId: action.target });
       }
     }
   }
   for (const [agentId, prevAction] of prevWsActions) {
-    if (
-      prevAction.urn !== CommandURN.AK_RESCUE ||
-      prevAction.target === undefined
-    )
-      continue;
+    if (prevAction.urn !== CommandURN.AK_RESCUE || prevAction.target === undefined) continue;
     const cur = actionMap.get(agentId);
-    if (
-      cur?.urn !== CommandURN.AK_RESCUE ||
-      cur.target !== prevAction.target
-    ) {
-      newEvents.push({
-        step: step - 1,
-        type: "rescue_end",
-        agentId,
-        targetId: prevAction.target,
-      });
+    if (cur?.urn !== CommandURN.AK_RESCUE || cur.target !== prevAction.target) {
+      newEvents.push({ step: step - 1, type: "rescue_end", agentId, targetId: prevAction.target });
     }
   }
   if (newEvents.length > 0) {
-    simEvents.update((ev) =>
-      [...ev, ...newEvents].sort((a, b) => a.step - b.step),
-    );
+    simEvents.update((ev) => [...ev, ...newEvents].sort((a, b) => a.step - b.step));
   }
 }
