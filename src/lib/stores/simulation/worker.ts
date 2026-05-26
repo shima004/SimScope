@@ -1,11 +1,11 @@
 // Background worker for parsing PERCEPTION log frames.
 // Returns perceptionTimeline and commTimeline as decoded data, and
-// percChangesRaw as raw bytes (Transferable) to avoid OOM on structured clone.
+// percChangesRaw as encoded visible changes without communication payloads.
 
 import { LogProto as LogProtoCodec } from "$lib/proto/RCRSLogProto";
 import { ComponentCommandURN, ComponentControlMsgURN } from "$lib/rcrs/urns";
 
-export type CommMsg = { senderId: number; channel: number; text: string };
+export type CommMsg = { senderId: number; channel: number; count: number };
 
 export type PerceptionResult = {
   perceptionTimeline: [number, [number, number[]][]][];
@@ -56,28 +56,24 @@ self.onmessage = ({
       percMap.get(time)!.set(entityID, visible.changes.map((c) => c.entityID));
 
       if (!changesRaw.has(time)) changesRaw.set(time, new Map());
-      changesRaw.get(time)!.set(entityID, bytes);
+      changesRaw.get(time)!.set(
+        entityID,
+        LogProtoCodec.encode({ perception: { time, entityID, visible, communications: [] } }).finish(),
+      );
     }
 
     if (communications.length > 0) {
-      const msgs: CommMsg[] = [];
+      const msgsBySenderAndChannel = new Map<string, CommMsg>();
       for (const msg of communications) {
         const senderId = msg.components[ComponentControlMsgURN.AgentID]?.entityID;
         if (senderId === undefined) continue;
         const channel = msg.components[ComponentCommandURN.Channel]?.intValue ?? 0;
-        const rawData = msg.components[ComponentCommandURN.Message]?.rawData;
-        let text = "";
-        if (rawData?.length) {
-          try {
-            text = new TextDecoder().decode(rawData);
-          } catch {
-            text = Array.from(rawData)
-              .map((b) => b.toString(16).padStart(2, "0"))
-              .join("");
-          }
-        }
-        msgs.push({ senderId, channel, text });
+        const key = `${senderId}:${channel}`;
+        const existing = msgsBySenderAndChannel.get(key);
+        if (existing) existing.count += 1;
+        else msgsBySenderAndChannel.set(key, { senderId, channel, count: 1 });
       }
+      const msgs = Array.from(msgsBySenderAndChannel.values());
       if (msgs.length > 0) {
         if (!commMap.has(time)) commMap.set(time, new Map());
         commMap.get(time)!.set(entityID, msgs);
