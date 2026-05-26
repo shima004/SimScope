@@ -6,7 +6,7 @@ export type Mode = "idle" | "ws" | "file";
 export interface CommMessage {
   senderId: number;
   channel: number;
-  text: string;
+  count: number;
 }
 
 export interface AgentAction {

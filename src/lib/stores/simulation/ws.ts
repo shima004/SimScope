@@ -3,6 +3,7 @@ import { applyChanges, decodeEntity } from "$lib/rcrs/decoder";
 import type { SimEntity } from "$lib/rcrs/types";
 import { CommandURN } from "$lib/rcrs/urns";
 import { get } from "svelte/store";
+import { logSimulationMemoryUsage } from "./memory";
 import {
   agentActions,
   agentCommStats,
@@ -36,10 +37,12 @@ type WsCommand = {
 let ws: WebSocket | null = null;
 let prevWsActions = new Map<number, AgentAction>();
 let wsAmbulanceCarrying = new Map<number, number>();
+let lastWsMemoryLogStep = -1;
 
 function resetWsEventState() {
   prevWsActions = new Map();
   wsAmbulanceCarrying = new Map();
+  lastWsMemoryLogStep = -1;
 }
 
 export function connectWS(url: string) {
@@ -70,6 +73,7 @@ export function connectWS(url: string) {
         maxStep.set(msg.maxStep);
         kernelConfig.set(msg.config ?? {});
         mode.set("ws");
+        logSimulationMemoryUsage("ws initial");
       } else if (msg.type === "TIMESTEP") {
         let nextMap: Map<number, SimEntity> | null = null;
         entities.update((map) => {
@@ -89,6 +93,7 @@ export function connectWS(url: string) {
         if (Array.isArray(msg.commands)) {
           handleWsCommands(msg.time as number, msg.commands);
         }
+        logWsMemoryUsage(msg.time as number);
       } else if (msg.type === "ERROR") {
         errorMsg.set(`Kernel error: ${msg.reason}`);
       }
@@ -105,6 +110,13 @@ export function connectWS(url: string) {
     mode.set("idle");
     errorMsg.set(wasConnected ? "Disconnected from server" : "Connection failed");
   };
+}
+
+function logWsMemoryUsage(step: number) {
+  if (step === lastWsMemoryLogStep) return;
+  if (step !== 1 && step % 25 !== 0) return;
+  lastWsMemoryLogStep = step;
+  logSimulationMemoryUsage(`ws step ${step}`);
 }
 
 export function disconnectWS() {

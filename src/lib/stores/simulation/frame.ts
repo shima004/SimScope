@@ -37,17 +37,6 @@ function getOrCreateNestedMap<K, IK, V>(
   return nested;
 }
 
-function decodeMessageText(rawData: Uint8Array | undefined): string {
-  if (!rawData?.length) return "";
-  try {
-    return new TextDecoder().decode(rawData);
-  } catch {
-    return Array.from(rawData)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
-}
-
 function handleConfigFrame(config: ConfigFrame) {
   const data = config.config?.data ?? {};
   kernelConfig.set(data);
@@ -158,16 +147,25 @@ function communicationToMessage(msg: CommunicationProto): CommMessage | null {
   return {
     senderId,
     channel: msg.components[ComponentCommandURN.Channel]?.intValue ?? 0,
-    text: decodeMessageText(msg.components[ComponentCommandURN.Message]?.rawData),
+    count: 1,
   };
 }
 
 function storeReceivedCommunications({ time, entityID, communications }: PerceptionFrame) {
   if (communications.length === 0) return;
 
-  const msgs = communications
-    .map(communicationToMessage)
-    .filter((msg): msg is CommMessage => msg !== null);
+  const msgsBySenderAndChannel = new Map<string, CommMessage>();
+  for (const communication of communications) {
+    const msg = communicationToMessage(communication);
+    if (!msg) continue;
+
+    const key = `${msg.senderId}:${msg.channel}`;
+    const existing = msgsBySenderAndChannel.get(key);
+    if (existing) existing.count += 1;
+    else msgsBySenderAndChannel.set(key, msg);
+  }
+
+  const msgs = Array.from(msgsBySenderAndChannel.values());
 
   if (msgs.length > 0) getOrCreateNestedMap(sim.commTimeline, time).set(entityID, msgs);
 }

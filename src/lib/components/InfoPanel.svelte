@@ -275,9 +275,11 @@
             $agentReceivedComms!.filter((m) => m.channel === ch),
           ]),
         )}
-        <div class="section-label">
-          Communications ({$agentReceivedComms.length})
-        </div>
+        {@const commCount = $agentReceivedComms.reduce(
+          (sum, msg) => sum + msg.count,
+          0,
+        )}
+        <div class="section-label">Communications ({commCount})</div>
         <div class="comm-ch-list">
           {#each subChs as ch}
             {@const msgs = byChannel.get(ch) ?? []}
@@ -292,7 +294,9 @@
               }}
             >
               <span class="ch-label">ch.{ch}</span>
-              <span class="ch-count">{msgs.length} msg</span>
+              <span class="ch-count"
+                >{msgs.reduce((sum, msg) => sum + msg.count, 0)} msg</span
+              >
               <span class="ch-arrow">{open ? "▾" : "▸"}</span>
             </button>
             {#if open && msgs.length > 0}
