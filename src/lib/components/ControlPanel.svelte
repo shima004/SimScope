@@ -1,19 +1,13 @@
 <script lang="ts">
-  import type { SimEntity } from "$lib/rcrs/types";
+  import { base } from "$app/paths";
   import { EntityURN, isAgent, isCommandCenter } from "$lib/rcrs/urns";
   import {
-    agentActions,
-    animatedEntities,
-    computeNextSnapshot,
     connected,
     connectWS,
     currentStep,
     disconnectWS,
-    entities,
     errorMsg,
-    agentDisplayMode,
     followMode,
-    getCommandsAtStep,
     kernelConfig,
     loadFile,
     loading,
@@ -22,17 +16,16 @@
     mode,
     perceptionViewMode,
     pinnedAgentId,
-    seekToStep,
     selectedEntity,
   } from "$lib/stores/simulation";
   import { onMount } from "svelte";
-  import { get } from "svelte/store";
 
   // /proxy?host=<tcp-host>&port=<tcp-port> → Vite の tcpWsProxyPlugin が中継
   const _q =
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search)
       : new URLSearchParams();
+  const paneMode = _q.has("pane");
   let tcpHost = $state(_q.get("host") ?? "localhost");
   let tcpPort = $state(_q.get("port") ?? "27931");
   const wsScheme = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss" : "ws";
@@ -41,6 +34,7 @@
   );
   let fileInput = $state<HTMLInputElement>();
   let logUrl = $state(_q.get("url") ?? "");
+  let compareUrlText = $state(_q.getAll("compare").join("\n"));
 
   onMount(async () => {
     const initialUrl = _q.get("url");
@@ -52,200 +46,6 @@
       connectWS(wsUrl);
     }
   });
-  let playing = $state(false);
-  let loopMode = $state(false);
-  let loopCountdown = $state<number | null>(null);
-  let loopTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  let loopIntervalId: ReturnType<typeof setInterval> | null = null;
-  let rafId: number | null = null;
-  let stepStartTime = 0;
-  let nextSnapshot: Map<number, SimEntity> | null = null;
-  let playSpeed = $state(1); // steps/sec multiplier
-  const SPEEDS = [0.5, 1, 2, 4, 8];
-  const LOOP_WAIT_MS = 15000;
-
-  function easeInOut(t: number): number {
-    return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-  }
-
-  // Catmull-Rom スプライン: p1→p2 間を t (0→1) で補間
-  function catmullRom(
-    p0: [number, number],
-    p1: [number, number],
-    p2: [number, number],
-    p3: [number, number],
-    t: number,
-  ): [number, number] {
-    const t2 = t * t,
-      t3 = t2 * t;
-    return [
-      0.5 *
-        (2 * p1[0] +
-          (-p0[0] + p2[0]) * t +
-          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
-          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
-      0.5 *
-        (2 * p1[1] +
-          (-p0[1] + p2[1]) * t +
-          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
-          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
-    ];
-  }
-
-  // positionHistory = [x0,y0, x1,y1, ...] の経路上を t (0→1) でスプライン補間
-  function posOnPath(hist: number[], t: number): [number, number] {
-    const pts: [number, number][] = [];
-    for (let i = 0; i + 1 < hist.length; i += 2)
-      pts.push([hist[i], hist[i + 1]]);
-    if (pts.length === 0) return [0, 0];
-    if (pts.length === 1) return pts[0];
-
-    // ease-in-out を適用
-    const et = easeInOut(t);
-
-    if (pts.length === 2) {
-      // 2点のみは線形 + easing
-      return [
-        pts[0][0] + (pts[1][0] - pts[0][0]) * et,
-        pts[0][1] + (pts[1][1] - pts[0][1]) * et,
-      ];
-    }
-
-    // セグメント長に基づいて進行位置を求める
-    const lens: number[] = [];
-    let total = 0;
-    for (let i = 0; i + 1 < pts.length; i++) {
-      const d = Math.hypot(
-        pts[i + 1][0] - pts[i][0],
-        pts[i + 1][1] - pts[i][1],
-      );
-      lens.push(d);
-      total += d;
-    }
-    if (total === 0) return pts[pts.length - 1];
-
-    let rem = et * total;
-    for (let i = 0; i < lens.length; i++) {
-      if (rem <= lens[i] || i === lens.length - 1) {
-        const s = lens[i] === 0 ? 0 : Math.min(rem / lens[i], 1);
-        // ファントム点（端点を繰り返す）を使って Catmull-Rom 適用
-        const p0 = pts[Math.max(0, i - 1)];
-        const p1 = pts[i];
-        const p2 = pts[Math.min(pts.length - 1, i + 1)];
-        const p3 = pts[Math.min(pts.length - 1, i + 2)];
-        return catmullRom(p0, p1, p2, p3, s);
-      }
-      rem -= lens[i];
-    }
-    return pts[pts.length - 1];
-  }
-
-  function interpolateEntities(
-    current: Map<number, SimEntity>,
-    next: Map<number, SimEntity>,
-    t: number,
-  ): Map<number, SimEntity> {
-    const result = new Map(current);
-    for (const [id, nextE] of next) {
-      const curE = current.get(id);
-      if (!curE || !("x" in curE) || !("x" in nextE)) continue;
-      // Skip interpolation when the entity is being carried (x/y reset to 0).
-      // Keep it at the current position; buildAgentLayers will hide it at step N+1.
-      if ((nextE as { x: number }).x === 0 && (nextE as { y: number }).y === 0) continue;
-      const hist = (nextE as { positionHistory?: number[] }).positionHistory;
-      let nx: number, ny: number;
-      if (hist && hist.length >= 4) {
-        [nx, ny] = posOnPath(hist, t);
-      } else {
-        nx =
-          (curE as { x: number }).x +
-          ((nextE as { x: number }).x - (curE as { x: number }).x) * t;
-        ny =
-          (curE as { y: number }).y +
-          ((nextE as { y: number }).y - (curE as { y: number }).y) * t;
-      }
-      result.set(id, { ...curE, x: nx, y: ny });
-    }
-    return result;
-  }
-
-  function preAdvanceActions() {
-    if ($currentStep < $maxStep) {
-      agentActions.set(getCommandsAtStep($currentStep + 1));
-    }
-  }
-
-  function startPlayback() {
-    playing = true;
-    stepStartTime = performance.now();
-    nextSnapshot =
-      $currentStep < $maxStep ? computeNextSnapshot($currentStep + 1) : null;
-    preAdvanceActions();
-
-    function tick(now: number) {
-      if (!playing) return;
-      const duration = 400 / playSpeed;
-      const elapsed = now - stepStartTime;
-
-      if (elapsed >= duration) {
-        if ($currentStep >= $maxStep) {
-          playing = false;
-          rafId = null;
-          if (loopMode) {
-            loopCountdown = LOOP_WAIT_MS / 1000;
-            loopIntervalId = setInterval(() => {
-              loopCountdown = (loopCountdown ?? 1) - 1;
-            }, 1000);
-            loopTimeoutId = setTimeout(() => {
-              clearInterval(loopIntervalId!);
-              loopIntervalId = null;
-              loopCountdown = null;
-              loopTimeoutId = null;
-              seekToStep(0);
-              startPlayback();
-            }, LOOP_WAIT_MS);
-          }
-          return;
-        }
-        seekToStep($currentStep + 1);
-        stepStartTime = now - (elapsed % duration);
-        nextSnapshot =
-          $currentStep < $maxStep
-            ? computeNextSnapshot($currentStep + 1)
-            : null;
-        preAdvanceActions();
-      } else if (nextSnapshot) {
-        animatedEntities.set(
-          interpolateEntities(get(entities), nextSnapshot, elapsed / duration),
-        );
-      }
-
-      rafId = requestAnimationFrame(tick);
-    }
-
-    rafId = requestAnimationFrame(tick);
-  }
-
-  function stopPlayback() {
-    playing = false;
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
-    if (loopTimeoutId !== null) {
-      clearTimeout(loopTimeoutId);
-      loopTimeoutId = null;
-    }
-    if (loopIntervalId !== null) {
-      clearInterval(loopIntervalId);
-      loopIntervalId = null;
-    }
-    loopCountdown = null;
-    nextSnapshot = null;
-    if (get(mode) === "file") {
-      agentActions.set(getCommandsAtStep(get(currentStep)));
-    }
-  }
   let showConfig = $state(false);
   let openGroups = $state<Set<string>>(new Set());
   let inputsCollapsed = $state(false);
@@ -279,42 +79,19 @@
     if (file) loadFile(file);
   }
 
-  function handleSeek(e: Event) {
-    seekToStep(Number((e.target as HTMLInputElement).value));
-  }
+  function openCompareMode() {
+    const urls = compareUrlText
+      .split(/\r?\n/)
+      .map((url) => url.trim())
+      .filter(Boolean);
+    if (urls.length < 2) return;
 
-  function stepBack() {
-    seekToStep(Math.max(0, $currentStep - 1));
-  }
-
-  function stepForward() {
-    seekToStep(Math.min($maxStep, $currentStep + 1));
-  }
-
-  function togglePlay() {
-    if (playing) {
-      stopPlayback();
-    } else {
-      startPlayback();
-    }
-  }
-
-  function setSpeed(s: number) {
-    if (playing) {
-      const elapsed = performance.now() - stepStartTime;
-      const progress = Math.min(elapsed / (400 / playSpeed), 1);
-      playSpeed = s;
-      stepStartTime = performance.now() - progress * (400 / s);
-    } else {
-      playSpeed = s;
-    }
+    const params = new URLSearchParams();
+    for (const url of urls) params.append("compare", url);
+    window.location.href = `${base || "/"}?${params.toString()}`;
   }
 
   $effect(() => {
-    // モードが変わったら自動再生を停止
-    if ($mode !== "file") {
-      stopPlayback();
-    }
     // 再生開始時にConnectionを折りたたむ
     if ($mode !== "idle") {
       inputsCollapsed = true;
@@ -412,6 +189,32 @@
       </div>
     </section>
 
+    {#if !paneMode}
+      <div class="divider">or</div>
+
+      <section>
+        <span class="section-label">Compare Logs</span>
+        <textarea
+          class="compare-input"
+          bind:value={compareUrlText}
+          placeholder="https://example.com/run-a.7z&#10;https://example.com/run-b.7z"
+          disabled={$loading}
+          rows="3"
+        ></textarea>
+        <button
+          class="btn primary compare-open"
+          onclick={openCompareMode}
+          disabled={$loading ||
+            compareUrlText
+              .split(/\r?\n/)
+              .map((url) => url.trim())
+              .filter(Boolean).length < 2}
+        >
+          Open synced comparison
+        </button>
+      </section>
+    {/if}
+
     {#if $errorMsg}
       <div class="error">{$errorMsg}</div>
     {/if}
@@ -424,60 +227,6 @@
         <span class="section-label">Step</span>
         <span class="step-counter">{$currentStep} / {$maxStep}</span>
       </div>
-      <input
-        type="range"
-        min="0"
-        max={$maxStep}
-        value={$currentStep}
-        oninput={handleSeek}
-      />
-      <div class="playback-row">
-        <button
-          class="btn icon"
-          onclick={stepBack}
-          disabled={$currentStep <= 0}
-          aria-label="1ステップ戻る">⏮</button
-        >
-        <button
-          class="btn icon play"
-          onclick={togglePlay}
-          aria-label={playing ? "一時停止" : "自動再生"}
-        >
-          {playing ? "⏸" : "▶"}
-        </button>
-        <button
-          class="btn icon"
-          onclick={stepForward}
-          disabled={$currentStep >= $maxStep}
-          aria-label="1ステップ進む">⏭</button
-        >
-        <button
-          class="btn icon loop"
-          class:active={loopMode}
-          onclick={() => { loopMode = !loopMode; if (!loopMode) stopPlayback(); }}
-          title={loopMode ? "ループ再生オフ" : "ループ再生オン"}
-          aria-label="ループ再生">🔁</button
-        >
-        <button
-          class="btn icon"
-          class:active={$agentDisplayMode === "emoji"}
-          onclick={() => agentDisplayMode.update((v) => (v === "emoji" ? "circle" : "emoji"))}
-          title={$agentDisplayMode === "emoji" ? "絵文字モード（クリックで切替）" : "Circleモード（クリックで切替）"}
-          aria-label="エージェント表示切替">{$agentDisplayMode === "emoji" ? "🚒" : "⬤"}</button
-        >
-        <div class="speed-btns">
-          {#each SPEEDS as s}
-            <button
-              class="btn speed"
-              class:active={playSpeed === s}
-              onclick={() => setSpeed(s)}>{s}x</button
-            >
-          {/each}
-        </div>
-      </div>
-      {#if loopCountdown !== null}
-        <div class="loop-countdown">{loopCountdown}s でループ再開</div>
-      {/if}
     </section>
   {/if}
 
@@ -668,6 +417,30 @@
     opacity: 0.5;
   }
 
+  .compare-input {
+    width: 100%;
+    min-height: 64px;
+    resize: vertical;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: #c8d8e8;
+    font-size: 11px;
+    line-height: 1.35;
+    padding: 6px 8px;
+    font-family: monospace;
+  }
+
+  .compare-input:disabled {
+    opacity: 0.5;
+  }
+
+  .compare-open {
+    width: 100%;
+    margin-top: 6px;
+  }
+
   .port-input {
     width: 52px;
     background: rgba(255, 255, 255, 0.05);
@@ -781,78 +554,6 @@
     font-size: 11px;
     color: #a8c8d8;
     font-variant-numeric: tabular-nums;
-  }
-
-  input[type="range"] {
-    width: 100%;
-    accent-color: #00c8ff;
-  }
-
-  .playback-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .speed-btns {
-    display: flex;
-    gap: 3px;
-    margin-left: 4px;
-  }
-
-  .btn.speed {
-    font-size: 10px;
-    padding: 3px 5px;
-    border: 1px solid rgba(0, 200, 255, 0.3);
-    color: #607080;
-    background: none;
-  }
-  .btn.speed:hover {
-    color: #a8c8d8;
-    border-color: rgba(0, 200, 255, 0.5);
-  }
-  .btn.speed.active {
-    color: #00c8ff;
-    border-color: rgba(0, 200, 255, 0.7);
-    background: rgba(0, 200, 255, 0.08);
-  }
-
-  .btn.icon {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #a8c8d8;
-    padding: 4px 10px;
-    font-size: 11px;
-    border-radius: 4px;
-  }
-
-  .btn.icon.loop.active {
-    color: #00c8ff;
-    border-color: rgba(0, 200, 255, 0.6);
-    background: rgba(0, 200, 255, 0.1);
-  }
-
-  .loop-countdown {
-    font-size: 10px;
-    color: #607080;
-    text-align: center;
-    padding: 3px 0 0;
-    font-variant-numeric: tabular-nums;
-  }
-  .btn.icon:hover:not(:disabled) {
-    background: rgba(0, 180, 255, 0.15);
-    color: #00c8ff;
-  }
-  .btn.icon.play {
-    background: rgba(0, 180, 255, 0.12);
-    border-color: rgba(0, 200, 255, 0.3);
-    color: #00c8ff;
-    min-width: 36px;
-  }
-  .btn.icon.play:hover {
-    background: rgba(0, 180, 255, 0.25);
   }
 
   .overlay-backdrop {
