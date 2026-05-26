@@ -60,6 +60,7 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
         lastYield = Date.now();
       }
     }
+    files.clear();
     finishFileLoad();
     return;
   }
@@ -139,6 +140,7 @@ async function loadRaw(raw: ArrayBuffer, filename = "archive.7z") {
   parseProgress.set(parsedFiles / totalFiles);
 
   await parsePerceptionEntries(percEntries, civilianIds, parsedFiles, totalFiles);
+  files.clear();
   finishFileLoad();
 }
 
