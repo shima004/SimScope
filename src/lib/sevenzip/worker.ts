@@ -56,13 +56,12 @@ function cleanupDir(sz: SevenZipModule, dir: string) {
   }
 }
 
-// Send progress to main thread (0–100)
 function sendProgress(pct: number) {
   self.postMessage({ ok: "progress", pct });
 }
 
-// Extract with progress. Output format with -bb1: " XX% NNNNN\b...\b- filepath"
-// Throttle to 1% increments to avoid flooding the main thread with messages.
+// Output format with -bb1: " XX% NNNNN\b...\b- filepath"
+// Throttle to 1% increments to avoid flooding the main thread.
 function extractWithProgress(
   sz: SevenZipModule,
   inPath: string,
@@ -156,7 +155,6 @@ self.onmessage = async (
 ) => {
   try {
     const files = await extract(e.data.buffer, e.data.filename);
-    // Uint8Array の underlying buffer を transfer して zero-copy で返す
     const entries = Array.from(files.entries());
     const transfers: Transferable[] = entries.map(
       ([, v]) => v.buffer as ArrayBuffer,

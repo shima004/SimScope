@@ -1,14 +1,5 @@
-import SevenZipWorker from "./sevenzip.worker?worker";
+import SevenZipWorker from "./worker?worker";
 
-/**
- * Extract an archive in a Web Worker and return all contained files as a
- * path → bytes map.  Runs off the main thread to avoid browser "page
- * unresponsive" warnings on large files.
- *
- * Supports .7z, .tgz, .tar.gz, .xz, .lzma formats.
- * For single-file formats (.xz/.lzma) the map contains one entry keyed
- * "__raw_log__".
- */
 type WorkerMsg =
   | { ok: true; entries: [string, Uint8Array][] }
   | { ok: false; error: string }
@@ -40,7 +31,6 @@ export function extract7zAllFiles(
       reject(err);
     };
 
-    // Transfer the buffer to the worker (zero-copy)
     worker.postMessage({ buffer, filename }, [buffer]);
   });
 }
