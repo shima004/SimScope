@@ -8,7 +8,6 @@ import type { PerceptionWorkerMsg } from "./worker";
 import PerceptionWorker from "./worker?worker";
 import { sim } from "./data";
 import { handleLogFrame } from "./frame";
-import { logSimulationMemoryUsage } from "./memory";
 import { resetSimulationState } from "./reset";
 import { computeSimEvents, rebuildState } from "./timeline";
 import {
@@ -159,7 +158,6 @@ function finishFileLoad() {
   currentStep.set(0);
   rebuildState(0);
   computeSimEvents();
-  logSimulationMemoryUsage("file load complete");
 }
 
 function parsePerceptionEntries(
