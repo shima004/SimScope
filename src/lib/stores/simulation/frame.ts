@@ -17,16 +17,47 @@ import {
 } from "./state";
 
 type LogProtoMsg = ReturnType<(typeof LogProtoCodec)["decode"]>;
+type ConfigFrame = NonNullable<LogProtoMsg["config"]>;
+type InitialConditionFrame = NonNullable<LogProtoMsg["initialCondition"]>;
+type CommandFrame = NonNullable<LogProtoMsg["command"]>;
+type CommandProto = CommandFrame["commands"][number];
+type PerceptionFrame = NonNullable<LogProtoMsg["perception"]>;
+type CommunicationProto = PerceptionFrame["communications"][number];
+type UpdateFrame = NonNullable<LogProtoMsg["update"]>;
 
-function handleConfigFrame(config: NonNullable<LogProtoMsg["config"]>) {
+function getOrCreateNestedMap<K, IK, V>(
+  map: Map<K, Map<IK, V>>,
+  key: K,
+): Map<IK, V> {
+  let nested = map.get(key);
+  if (!nested) {
+    nested = new Map<IK, V>();
+    map.set(key, nested);
+  }
+  return nested;
+}
+
+function decodeMessageText(rawData: Uint8Array | undefined): string {
+  if (!rawData?.length) return "";
+  try {
+    return new TextDecoder().decode(rawData);
+  } catch {
+    return Array.from(rawData)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+}
+
+function handleConfigFrame(config: ConfigFrame) {
   const data = config.config?.data ?? {};
   kernelConfig.set(data);
+
   const allCh = new Set<number>();
   for (let i = 0; data[`comms.channels.${i}.type`]; i++) allCh.add(i);
   if (allCh.size > 0) hiddenChannels.set(allCh);
 }
 
-function handleInitialConditionFrame(ic: NonNullable<LogProtoMsg["initialCondition"]>) {
+function handleInitialConditionFrame(ic: InitialConditionFrame) {
   const map = new Map<number, SimEntity>();
   for (const proto of ic.entities) {
     const entity = decodeEntity(proto);
@@ -38,7 +69,41 @@ function handleInitialConditionFrame(ic: NonNullable<LogProtoMsg["initialConditi
   animatedEntities.set(map);
 }
 
-function handleCommandFrame({ time, commands: cmds }: NonNullable<LogProtoMsg["command"]>) {
+function addSpeakCommand(
+  cmd: CommandProto,
+  agentId: number,
+  speakMap: Map<number, { count: number; bytes: number }>,
+  agentCommMap: Map<number, { speak: number; bytes: number }>,
+) {
+  const channel = cmd.components[ComponentCommandURN.Channel]?.intValue;
+  const raw = cmd.components[ComponentCommandURN.Message]?.rawData;
+  const bytes = raw?.length ?? 0;
+
+  const ac = agentCommMap.get(agentId) ?? { speak: 0, bytes: 0 };
+  agentCommMap.set(agentId, { speak: ac.speak + 1, bytes: ac.bytes + bytes });
+
+  if (channel === undefined || !raw) return;
+
+  const cs = speakMap.get(channel) ?? { count: 0, bytes: 0 };
+  speakMap.set(channel, { count: cs.count + 1, bytes: cs.bytes + raw.length });
+}
+
+function commandToAction(cmd: CommandProto): AgentAction {
+  const action: AgentAction = { urn: cmd.urn };
+  const target = cmd.components[ComponentCommandURN.Target]?.entityID;
+  const destX = cmd.components[ComponentCommandURN.DestinationX]?.intValue;
+  const destY = cmd.components[ComponentCommandURN.DestinationY]?.intValue;
+  const path = cmd.components[ComponentCommandURN.Path]?.entityIDList?.values;
+
+  if (target !== undefined) action.target = target;
+  if (destX !== undefined) action.destX = destX;
+  if (destY !== undefined) action.destY = destY;
+  if (path?.length) action.path = path;
+
+  return action;
+}
+
+function handleCommandFrame({ time, commands: cmds }: CommandFrame) {
   const actionMap = new Map<number, AgentAction>();
   const speakMap = new Map<number, { count: number; bytes: number }>();
   const agentCommMap = new Map<number, { speak: number; bytes: number }>();
@@ -49,15 +114,7 @@ function handleCommandFrame({ time, commands: cmds }: NonNullable<LogProtoMsg["c
     if (agentId === undefined) continue;
 
     if (cmd.urn === CommandURN.AK_SPEAK) {
-      const channel = cmd.components[ComponentCommandURN.Channel]?.intValue;
-      const raw = cmd.components[ComponentCommandURN.Message]?.rawData;
-      const bytes = raw?.length ?? 0;
-      const ac = agentCommMap.get(agentId) ?? { speak: 0, bytes: 0 };
-      agentCommMap.set(agentId, { speak: ac.speak + 1, bytes: ac.bytes + bytes });
-      if (channel !== undefined && raw) {
-        const cs = speakMap.get(channel) ?? { count: 0, bytes: 0 };
-        speakMap.set(channel, { count: cs.count + 1, bytes: cs.bytes + raw.length });
-      }
+      addSpeakCommand(cmd, agentId, speakMap, agentCommMap);
       continue;
     }
 
@@ -69,16 +126,7 @@ function handleCommandFrame({ time, commands: cmds }: NonNullable<LogProtoMsg["c
       continue;
     }
 
-    const action: AgentAction = { urn: cmd.urn };
-    const target = cmd.components[ComponentCommandURN.Target]?.entityID;
-    const destX = cmd.components[ComponentCommandURN.DestinationX]?.intValue;
-    const destY = cmd.components[ComponentCommandURN.DestinationY]?.intValue;
-    const path = cmd.components[ComponentCommandURN.Path]?.entityIDList?.values;
-    if (target !== undefined) action.target = target;
-    if (destX !== undefined) action.destX = destX;
-    if (destY !== undefined) action.destY = destY;
-    if (path?.length) action.path = path;
-    actionMap.set(agentId, action);
+    actionMap.set(agentId, commandToAction(cmd));
   }
 
   sim.commandTimeline.set(time, actionMap);
@@ -87,45 +135,49 @@ function handleCommandFrame({ time, commands: cmds }: NonNullable<LogProtoMsg["c
   if (agentSubMap.size > 0) sim.agentSubscribeTimeline.set(time, agentSubMap);
 }
 
-function handlePerceptionFrame({ time, entityID, visible, communications }: NonNullable<LogProtoMsg["perception"]>) {
-  if (visible && visible.changes.length > 0) {
-    if (!sim.perceptionTimeline.has(time)) sim.perceptionTimeline.set(time, new Map());
-    sim.perceptionTimeline.get(time)!.set(entityID, visible.changes.map((c) => c.entityID));
+function storeVisibleEntities({ time, entityID, visible }: PerceptionFrame) {
+  if (!visible || visible.changes.length === 0) return;
 
-    // WS mode: encode visible back to bytes for on-demand decoding in rebuildPerceivedWorld.
-    // (File mode populates perceptionChangesRaw via the perception worker.)
-    if (!sim.perceptionChangesRaw.has(time)) sim.perceptionChangesRaw.set(time, new Map());
-    sim.perceptionChangesRaw.get(time)!.set(
-      entityID,
-      LogProtoCodec.encode({ perception: { time, entityID, visible, communications: [] } }).finish(),
-    );
-  }
+  getOrCreateNestedMap(sim.perceptionTimeline, time).set(
+    entityID,
+    visible.changes.map((c) => c.entityID),
+  );
 
-  if (communications.length > 0) {
-    const msgs: CommMessage[] = [];
-    for (const msg of communications) {
-      const senderId = msg.components[ComponentControlMsgURN.AgentID]?.entityID;
-      if (senderId === undefined) continue;
-      const channel = msg.components[ComponentCommandURN.Channel]?.intValue ?? 0;
-      const rawData = msg.components[ComponentCommandURN.Message]?.rawData;
-      let text = "";
-      if (rawData?.length) {
-        try {
-          text = new TextDecoder().decode(rawData);
-        } catch {
-          text = Array.from(rawData).map((b) => b.toString(16).padStart(2, "0")).join("");
-        }
-      }
-      msgs.push({ senderId, channel, text });
-    }
-    if (msgs.length > 0) {
-      if (!sim.commTimeline.has(time)) sim.commTimeline.set(time, new Map());
-      sim.commTimeline.get(time)!.set(entityID, msgs);
-    }
-  }
+  // WS mode: encode visible back to bytes for on-demand decoding in rebuildPerceivedWorld.
+  // (File mode populates perceptionChangesRaw via the perception worker.)
+  getOrCreateNestedMap(sim.perceptionChangesRaw, time).set(
+    entityID,
+    LogProtoCodec.encode({ perception: { time, entityID, visible, communications: [] } }).finish(),
+  );
 }
 
-function handleUpdateFrame({ time, changes }: NonNullable<LogProtoMsg["update"]>) {
+function communicationToMessage(msg: CommunicationProto): CommMessage | null {
+  const senderId = msg.components[ComponentControlMsgURN.AgentID]?.entityID;
+  if (senderId === undefined) return null;
+
+  return {
+    senderId,
+    channel: msg.components[ComponentCommandURN.Channel]?.intValue ?? 0,
+    text: decodeMessageText(msg.components[ComponentCommandURN.Message]?.rawData),
+  };
+}
+
+function storeReceivedCommunications({ time, entityID, communications }: PerceptionFrame) {
+  if (communications.length === 0) return;
+
+  const msgs = communications
+    .map(communicationToMessage)
+    .filter((msg): msg is CommMessage => msg !== null);
+
+  if (msgs.length > 0) getOrCreateNestedMap(sim.commTimeline, time).set(entityID, msgs);
+}
+
+function handlePerceptionFrame(frame: PerceptionFrame) {
+  storeVisibleEntities(frame);
+  storeReceivedCommunications(frame);
+}
+
+function handleUpdateFrame({ time, changes }: UpdateFrame) {
   if (!changes) return;
   if (get(mode) === "file") {
     sim.timeline.set(time, changes);
