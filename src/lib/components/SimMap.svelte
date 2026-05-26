@@ -490,6 +490,7 @@
   function buildAgentLayers(
     emap: Map<number, SimEntity>,
     selId: number | null,
+    actions: Map<number, AgentAction>,
     perceivedIds: Set<number> | null,
     displayMode: "circle" | "emoji" = "emoji",
   ) {
@@ -517,6 +518,11 @@
 
     if (displayMode === "emoji") {
       const { atlas, mapping } = getEmojiAtlas();
+      const rescuingFireBrigades = rescueAgents.filter(
+        (a) =>
+          a.urn === EntityURN.FIRE_BRIGADE &&
+          actions.get(a.id)?.urn === CommandURN.AK_RESCUE,
+      );
       const emojiLayer = (id: string, data: HumanEntity[]) =>
         new IconLayer({
           id,
@@ -540,6 +546,27 @@
         });
       return [
         emojiLayer("civilians-emoji", civilians),
+        new ScatterplotLayer({
+          id: "rescuing-fire-brigades-highlight",
+          data: rescuingFireBrigades,
+          getPosition: (d: HumanEntity) => [d.x, d.y],
+          getFillColor: (d: HumanEntity) => {
+            const dim =
+              perceivedIds && !perceivedIds.has(d.id) && d.id !== selId;
+            return dim ? [255, 140, 0, 40] : [255, 140, 0, 210];
+          },
+          getLineColor: [255, 255, 255, 220],
+          getRadius: (d: HumanEntity) => (d.id === selId ? 850 : 650),
+          radiusMinPixels: 8,
+          radiusMaxPixels: 24,
+          stroked: true,
+          lineWidthMinPixels: 1,
+          pickable: false,
+          updateTriggers: {
+            getFillColor: [perceivedIds],
+            getRadius: [selId],
+          },
+        }),
         emojiLayer("rescue-agents-emoji", rescueAgents),
         new IconLayer({
           id: "passengers-emoji",
@@ -567,7 +594,7 @@
         getFillColor: (d: HumanEntity) => {
           const [r, g, b, a] = agentColor(
             d.urn,
-            undefined,
+            actions.get(d.id),
             carrierMap.has(d.id),
             d.hp,
           );
@@ -581,7 +608,10 @@
         pickable: true,
         onClick: (info: PickingInfo) =>
           selectEntity((info.object as HumanEntity)?.id ?? null),
-        updateTriggers: { getRadius: [selId], getFillColor: [perceivedIds] },
+        updateTriggers: {
+          getRadius: [selId],
+          getFillColor: [actions, perceivedIds],
+        },
       });
     return [
       circleLayer("civilians-circle", civilians),
@@ -735,10 +765,11 @@
   );
 
   const unsubAgents = agentArgs.subscribe(
-    ({ emap, selId, perceivedIds, displayMode }) => {
+    ({ emap, selId, actions, perceivedIds, displayMode }) => {
       cachedAgentLayers = buildAgentLayers(
         emap,
         selId,
+        actions,
         perceivedIds,
         displayMode,
       );
