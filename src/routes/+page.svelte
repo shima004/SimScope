@@ -346,8 +346,12 @@
     paneMode = params.has("pane");
     compareUrls = params.getAll("compare").filter(Boolean);
     const panes = Math.max(0, parseInt(params.get("panes") ?? "0", 10));
-    if (panes > 1 && !embedMode && !paneMode) {
-      paneSources = Array.from({ length: panes }, emptyPaneSrc);
+    if (!embedMode && !paneMode) {
+      if (compareUrls.length === 0 && panes > 0) {
+        paneSources = [currentPaneSrc(), ...Array.from({ length: panes - 1 }, emptyPaneSrc)];
+      } else if (compareUrls.length === 0) {
+        paneSources = [currentPaneSrc()];
+      }
     }
 
     const timer =
