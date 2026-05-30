@@ -32,6 +32,11 @@
   import { onMount } from "svelte";
   import { get } from "svelte/store";
 
+  type SimCamera = {
+    target: [number, number, number];
+    zoom: number;
+  };
+
   function fmtBytes(b: number): string {
     if (b >= 1024 * 1024 * 1024) return `${(b / (1024 * 1024 * 1024)).toFixed(1)} GB`;
     if (b >= 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`;
@@ -99,6 +104,8 @@
           __simscope_maxStep?: () => number;
           __simscope_previewStep?: (nextStep: number, progress: number) => void;
           __simscope_setAgentDisplayMode?: (mode: "circle" | "emoji") => void;
+          __simscope_getCamera?: () => SimCamera | null;
+          __simscope_setCamera?: (camera: SimCamera) => void;
         })
       | undefined;
   }
@@ -125,11 +132,45 @@
   let compareLoopTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let compareLoopIntervalId: ReturnType<typeof setInterval> | null = null;
   let compareAgentDisplayMode = $state<"circle" | "emoji">("circle");
+  let compareCameraSync = $state(true);
 
   function setCompareAgentDisplayMode(mode: "circle" | "emoji") {
     compareAgentDisplayMode = mode;
     for (const frame of activeFrames()) {
       getFrameApi(frame)?.__simscope_setAgentDisplayMode?.(mode);
+    }
+  }
+
+  function syncCameraToFrame(targetFrame: HTMLIFrameElement) {
+    if (!compareCameraSync) return;
+    const sourceFrame = activeFrames().find((frame) => frame !== targetFrame);
+    const camera = sourceFrame ? getFrameApi(sourceFrame)?.__simscope_getCamera?.() : null;
+    if (camera) getFrameApi(targetFrame)?.__simscope_setCamera?.(camera);
+  }
+
+  function syncCameraToAllFrames() {
+    const frames = activeFrames();
+    const sourceFrame = frames.find((frame) => getFrameApi(frame)?.__simscope_getCamera?.());
+    const camera = sourceFrame ? getFrameApi(sourceFrame)?.__simscope_getCamera?.() : null;
+    if (!camera) return;
+    for (const frame of frames) {
+      if (frame !== sourceFrame) getFrameApi(frame)?.__simscope_setCamera?.(camera);
+    }
+  }
+
+  function toggleCompareCameraSync() {
+    compareCameraSync = !compareCameraSync;
+    if (compareCameraSync) requestAnimationFrame(syncCameraToAllFrames);
+  }
+
+  function syncCameraFromWindow(sourceWindow: Window | null, camera: SimCamera) {
+    if (!compareCameraSync) return;
+    const sourceFrame = activeFrames().find(
+      (frame) => frame.contentWindow === sourceWindow,
+    );
+    if (!sourceFrame) return;
+    for (const frame of activeFrames()) {
+      if (frame !== sourceFrame) getFrameApi(frame)?.__simscope_setCamera?.(camera);
     }
   }
 
@@ -357,6 +398,16 @@
     const timer =
       !embedMode && !paneMode ? setInterval(updateCompareMaxStep, 500) : null;
 
+    function handleMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      if (embedMode || paneMode) return;
+      const data = event.data as { type?: string; camera?: SimCamera };
+      if (data?.type !== "simscope:camera" || !data.camera) return;
+      syncCameraFromWindow(event.source as Window | null, data.camera);
+    }
+
+    window.addEventListener("message", handleMessage);
+
     const autoUrl = params.get("autoload");
     const autoStep = params.get("step");
     void (async () => {
@@ -398,9 +449,17 @@
     (window as unknown as Record<string, unknown>).__simscope_setAgentDisplayMode = (
       mode: "circle" | "emoji",
     ) => agentDisplayMode.set(mode);
+    (
+      window as unknown as Record<string, unknown>
+    ).__simscope_syncCameraFromChild = (camera: SimCamera, sourceWindow: Window) =>
+      syncCameraFromWindow(sourceWindow, camera);
 
     return () => {
       if (timer) clearInterval(timer);
+      window.removeEventListener("message", handleMessage);
+      delete (
+        window as unknown as Record<string, unknown>
+      ).__simscope_syncCameraFromChild;
       stopComparePlayback();
       stopSinglePlayback();
     };
@@ -426,6 +485,7 @@
               title="Simulation {i + 1}"
               src={src}
               bind:this={paneFrames[i]}
+              onload={() => paneFrames[i] && syncCameraToFrame(paneFrames[i])}
             ></iframe>
           </section>
         {/each}
@@ -453,6 +513,14 @@
           title={compareAgentDisplayMode === "emoji" ? "絵文字モード（クリックで切替）" : "Circleモード（クリックで切替）"}
         >
           {compareAgentDisplayMode === "emoji" ? "🚒" : "⬤"}
+        </button>
+        <button
+          class="compare-btn camera-sync"
+          class:active={compareCameraSync}
+          onclick={toggleCompareCameraSync}
+          title={compareCameraSync ? "カメラ同期オン" : "カメラ同期オフ"}
+        >
+          {compareCameraSync ? "🔗" : "⛓"}
         </button>
         <span class="compare-step">{compareStep} / {compareMaxStep}</span>
         <input
@@ -489,6 +557,7 @@
               title="Simulation {i + 1}"
               src={compareSrc(url)}
               bind:this={compareFrames[i]}
+              onload={() => compareFrames[i] && syncCameraToFrame(compareFrames[i])}
             ></iframe>
           </section>
         {/each}
@@ -515,6 +584,14 @@
           title={compareAgentDisplayMode === "emoji" ? "絵文字モード（クリックで切替）" : "Circleモード（クリックで切替）"}
         >
           {compareAgentDisplayMode === "emoji" ? "🚒" : "⬤"}
+        </button>
+        <button
+          class="compare-btn camera-sync"
+          class:active={compareCameraSync}
+          onclick={toggleCompareCameraSync}
+          title={compareCameraSync ? "カメラ同期オン" : "カメラ同期オフ"}
+        >
+          {compareCameraSync ? "🔗" : "⛓"}
         </button>
         <span class="compare-step">{compareStep} / {compareMaxStep}</span>
         <input

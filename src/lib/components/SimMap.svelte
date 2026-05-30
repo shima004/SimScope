@@ -46,6 +46,11 @@
   let canvas: HTMLCanvasElement;
   let deck: Deck<OrthographicView> | null = null;
 
+  type SimCamera = {
+    target: [number, number, number];
+    zoom: number;
+  };
+
   // ── Color helpers ─────────────────────────────────────────────────────────
 
   // Base color per facility type (used when not on fire)
@@ -668,22 +673,84 @@
       minZoom: zoom - 5,
       maxZoom: zoom + 10,
     };
+    currentTarget = target;
+    currentZoom = zoom;
     deck.setProps({ initialViewState: viewState });
   }
 
   // ── Follow mode ───────────────────────────────────────────────────────────
 
   let currentZoom = 0;
+  let currentTarget: [number, number, number] = [0, 0, 0];
   let fitZoom = 0;
+  let suppressCameraBroadcast = false;
+  let suppressCameraTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  function cameraFromViewState(viewState: OrthographicViewState): SimCamera | null {
+    const target = viewState.target;
+    const zoom = viewState.zoom;
+    if (!Array.isArray(target) || target.length < 2 || typeof zoom !== "number") return null;
+    return {
+      target: [
+        Number(target[0]),
+        Number(target[1]),
+        Number(target[2] ?? 0),
+      ] as [number, number, number],
+      zoom,
+    };
+  }
+
+  function applyCamera(camera: SimCamera, remote = false) {
+    if (!deck) return;
+    if (remote) {
+      suppressCameraBroadcast = true;
+      if (suppressCameraTimeoutId !== null) clearTimeout(suppressCameraTimeoutId);
+      suppressCameraTimeoutId = setTimeout(() => {
+        suppressCameraBroadcast = false;
+        suppressCameraTimeoutId = null;
+      }, 50);
+    }
+    currentTarget = camera.target;
+    currentZoom = camera.zoom;
+    deck.setProps({
+      initialViewState: {
+        target: camera.target,
+        zoom: camera.zoom,
+        minZoom: fitZoom - 5,
+        maxZoom: fitZoom + 10,
+      },
+    });
+  }
+
+  function broadcastCamera(camera: SimCamera) {
+    const parentApi = window.parent as
+      | (Window & {
+          __simscope_syncCameraFromChild?: (
+            camera: SimCamera,
+            sourceWindow: Window,
+          ) => void;
+        })
+      | undefined;
+
+    if (parentApi?.__simscope_syncCameraFromChild && window.parent !== window) {
+      parentApi.__simscope_syncCameraFromChild(camera, window);
+    } else {
+      window.parent.postMessage(
+        { type: "simscope:camera", camera },
+        window.location.origin,
+      );
+    }
+  }
 
   function followAgent(emap: Map<number, SimEntity>, selId: number | null) {
     if (!$followMode || selId === null || !deck) return;
     const e = emap.get(selId);
     if (!e || !isAgent(e.urn)) return;
     const h = e as HumanEntity;
+    currentTarget = [h.x, h.y, 0] as [number, number, number];
     deck.setProps({
       initialViewState: {
-        target: [h.x, h.y, 0] as [number, number, number],
+        target: currentTarget,
         zoom: currentZoom,
         minZoom: currentZoom - 5,
         maxZoom: currentZoom + 10,
@@ -787,9 +854,11 @@
   const unsubFocus = focusPoint.subscribe((pt) => {
     if (!pt || !deck) return;
     const closeZoom = Math.max(currentZoom, fitZoom + 5);
+    currentTarget = [pt.x, pt.y, 0] as [number, number, number];
+    currentZoom = closeZoom;
     deck.setProps({
       initialViewState: {
-        target: [pt.x, pt.y, 0] as [number, number, number],
+        target: currentTarget,
         zoom: closeZoom,
         minZoom: fitZoom - 5,
         maxZoom: fitZoom + 10,
@@ -819,13 +888,27 @@
         }
       },
       onViewStateChange: ({ viewState }) => {
-        const z = (viewState as OrthographicViewState).zoom;
-        if (typeof z === "number") currentZoom = z;
+        const camera = cameraFromViewState(viewState as OrthographicViewState);
+        if (!camera) return;
+        currentTarget = camera.target;
+        currentZoom = camera.zoom;
+        if (!suppressCameraBroadcast) broadcastCamera(camera);
       },
     });
+
+    (window as unknown as Record<string, unknown>).__simscope_getCamera = () => ({
+      target: currentTarget,
+      zoom: currentZoom,
+    });
+    (window as unknown as Record<string, unknown>).__simscope_setCamera = (
+      camera: SimCamera,
+    ) => applyCamera(camera, true);
   });
 
   onDestroy(() => {
+    if (suppressCameraTimeoutId !== null) clearTimeout(suppressCameraTimeoutId);
+    delete (window as unknown as Record<string, unknown>).__simscope_getCamera;
+    delete (window as unknown as Record<string, unknown>).__simscope_setCamera;
     unsubStatic();
     unsubAgents();
     unsubFit();
