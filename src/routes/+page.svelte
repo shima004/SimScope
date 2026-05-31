@@ -111,7 +111,7 @@
   }
 
   function activeFrames() {
-    return paneSources.length > 0 ? paneFrames : compareFrames;
+    return paneSources.length > 1 ? paneFrames : compareFrames;
   }
 
   function seekCompare(step: number) {
@@ -364,7 +364,7 @@
 
   let paneSources = $state<string[]>([]);
   let paneFrames = $state<HTMLIFrameElement[]>([]);
-  const showingPaneGrid = $derived(paneSources.length > 0 && !embedMode && !paneMode);
+  const showingPaneGrid = $derived(paneSources.length > 1 && !embedMode && !paneMode);
 
   function enterPaneMode() {
     paneSources = [currentPaneSrc(), emptyPaneSrc()];
@@ -388,10 +388,8 @@
     compareUrls = params.getAll("compare").filter(Boolean);
     const panes = Math.max(0, parseInt(params.get("panes") ?? "0", 10));
     if (!embedMode && !paneMode) {
-      if (compareUrls.length === 0 && panes > 0) {
+      if (compareUrls.length === 0 && panes > 1) {
         paneSources = [currentPaneSrc(), ...Array.from({ length: panes - 1 }, emptyPaneSrc)];
-      } else if (compareUrls.length === 0) {
-        paneSources = [currentPaneSrc()];
       }
     }
 
@@ -701,6 +699,7 @@
   {/if}
   {#if !screenshotMode && !embedMode && !paneMode && $mode === "file" && $maxStep > 0}
     <div class="compare-controls single-controls">
+      <button class="compare-btn add" onclick={enterPaneMode} title="Add simulation pane">＋</button>
       <button class="compare-btn" onclick={() => seekSingle($currentStep - 1)} disabled={$currentStep <= 0}>⏮</button>
       <button class="compare-btn play" onclick={toggleSinglePlayback}>{singlePlaying ? "⏸" : "▶"}</button>
       <button class="compare-btn" onclick={() => seekSingle($currentStep + 1)} disabled={$currentStep >= $maxStep}>⏭</button>
