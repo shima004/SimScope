@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import type { SimEventType } from "$lib/stores/simulation";
   import {
     currentStep,
@@ -12,12 +13,12 @@
   } from "$lib/stores/simulation";
   import { get } from "svelte/store";
 
-  const EVENT_LABELS: Record<SimEventType, string> = {
-    rescue_start: "Rescue Start",
-    rescue_end: "Rescue End",
-    carry_start: "Carry Start",
-    carry_end: "Carry End",
-  };
+  const EVENT_LABEL_KEYS = {
+    rescue_start: "timeline.event.rescue_start",
+    rescue_end: "timeline.event.rescue_end",
+    carry_start: "timeline.event.carry_start",
+    carry_end: "timeline.event.carry_end",
+  } as const;
 
   const EVENT_COLORS: Record<SimEventType, string> = {
     rescue_start: "#40c870",
@@ -96,7 +97,7 @@
 
 <div class="timeline-panel">
   <div class="panel-header">
-    <span class="panel-label">Event Timeline</span>
+    <span class="panel-label">{$t("timeline.title")}</span>
     <span class="event-count">{filtered.length}</span>
   </div>
 
@@ -108,20 +109,20 @@
         style="--color:{EVENT_COLORS[type]}"
         onclick={() => toggleFilter(type)}
       >
-        {EVENT_LABELS[type]}
+        {$t(EVENT_LABEL_KEYS[type])}
       </button>
     {/each}
   </div>
 
   <div class="event-list">
     {#if filtered.length === 0}
-      <div class="empty">No events</div>
+      <div class="empty">{$t("timeline.noEvents")}</div>
     {:else}
       {#each filtered as ev, i (ev.step + "-" + ev.type + "-" + ev.agentId + "-" + ev.targetId)}
         {@const meta = groupMeta[i]}
         {#if i === nowLineIndex && nowLineIndex !== -1}
           <div class="now-divider">
-            <span class="now-label">NOW</span>
+            <span class="now-label">{$t("timeline.now")}</span>
           </div>
         {/if}
         <button
@@ -129,7 +130,7 @@
           class:current={$currentStep === ev.step}
           class:in-group={meta.inGroup}
           onclick={() => selectEvent(ev.step, ev.agentId, ev.targetId)}
-          title="Step {ev.step} — Agent {ev.agentId} → Target {ev.targetId}"
+          title="{$t('control.step')} {ev.step} - {$t('timeline.agent')} {ev.agentId} -> {$t('timeline.target')} {ev.targetId}"
         >
           <!-- connector column -->
           <span
@@ -145,7 +146,7 @@
             class="type-badge"
             style="color:{EVENT_COLORS[ev.type]};border-color:{EVENT_COLORS[ev.type]}22"
           >
-            {EVENT_LABELS[ev.type]}
+            {$t(EVENT_LABEL_KEYS[ev.type])}
           </span>
           <span class="agent-id">A:{ev.agentId}</span>
           <span class="target-id" class:highlighted={meta.inGroup}>T:{ev.targetId}</span>
@@ -162,6 +163,7 @@
     height: 100%;
     color: #c8d8e8;
     font-size: 12px;
+    line-height: 1.2;
     overflow: hidden;
   }
 
@@ -169,13 +171,15 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 10px 12px 8px;
+    min-height: 30px;
+    padding: 8px 12px 6px;
     border-bottom: 1px solid rgba(0, 200, 255, 0.15);
     flex-shrink: 0;
   }
 
   .panel-label {
     font-size: 11px;
+    line-height: 13px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -185,6 +189,7 @@
 
   .event-count {
     font-size: 10px;
+    line-height: 12px;
     color: #607080;
     background: rgba(255, 255, 255, 0.06);
     padding: 1px 5px;
@@ -195,17 +200,19 @@
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    padding: 8px 10px;
+    padding: 6px 10px;
     border-bottom: 1px solid rgba(0, 200, 255, 0.1);
     flex-shrink: 0;
   }
 
   .filter-btn {
     font-size: 9px;
+    min-height: 17px;
+    line-height: 1;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    padding: 2px 6px;
+    padding: 1px 6px;
     border-radius: 3px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.04);
@@ -235,6 +242,7 @@
     text-align: center;
     color: #405060;
     font-size: 11px;
+    line-height: 14px;
   }
 
   .event-row {
@@ -243,6 +251,7 @@
     grid-template-columns: 12px 36px 90px 66px 66px;
     align-items: center;
     column-gap: 4px;
+    min-height: 20px;
     padding: 2px 8px 2px 4px;
     border-radius: 3px;
     transition: background 0.1s;
@@ -325,6 +334,7 @@
   /* ── data columns ── */
   .step-num {
     font-size: 10px;
+    line-height: 12px;
     font-variant-numeric: tabular-nums;
     color: #607080;
     white-space: nowrap;
@@ -332,6 +342,7 @@
 
   .type-badge {
     font-size: 9px;
+    line-height: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -344,6 +355,7 @@
 
   .agent-id {
     font-size: 10px;
+    line-height: 12px;
     font-variant-numeric: tabular-nums;
     color: #c8a040;
     white-space: nowrap;
@@ -351,6 +363,7 @@
 
   .target-id {
     font-size: 10px;
+    line-height: 12px;
     font-variant-numeric: tabular-nums;
     color: #a060c8;
     white-space: nowrap;
@@ -366,7 +379,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 8px;
+    min-height: 18px;
+    padding: 3px 8px;
     pointer-events: none;
   }
 
@@ -380,6 +394,7 @@
 
   .now-label {
     font-size: 8px;
+    line-height: 10px;
     font-weight: 700;
     letter-spacing: 0.1em;
     color: #ffc840;

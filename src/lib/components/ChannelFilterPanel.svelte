@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { channelColorCSS } from "$lib/rcrs/channelColors";
   import {
     currentSpeakStats,
@@ -44,7 +45,7 @@
 
 {#if channels.length > 0}
   <div class="panel">
-    <div class="title">Channels</div>
+    <div class="title">{$t("channels.title")}</div>
     <div class="ch-list">
       {#each channels as ch}
         {@const hidden = $hiddenChannels.has(ch.index)}
@@ -88,30 +89,33 @@
     background: rgba(13, 20, 30, 0.92);
     border: 1px solid rgba(0, 200, 255, 0.2);
     border-radius: 6px;
-    padding: 6px 10px 8px;
+    padding: 5px 10px 6px;
+    line-height: 1.2;
     backdrop-filter: blur(6px);
     box-shadow: 0 0 20px rgba(0, 180, 255, 0.08);
   }
 
   .title {
     font-size: 10px;
+    line-height: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #00c8ff;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
 
   .ch-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
   }
 
   .ch-row {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-height: 21px;
   }
 
   .ch-btn {
@@ -119,10 +123,11 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    min-height: 21px;
     background: color-mix(in srgb, var(--c) 12%, transparent);
     border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
     border-radius: 4px;
-    padding: 3px 7px;
+    padding: 2px 7px;
     cursor: pointer;
     transition:
       opacity 0.15s,
@@ -144,12 +149,14 @@
 
   .ch-meta {
     font-size: 10px;
+    line-height: 12px;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
   }
 
   .ch-count {
     font-size: 10px;
+    line-height: 12px;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
   }
@@ -159,6 +166,7 @@
 
   .ch-label {
     font-size: 11px;
+    line-height: 13px;
     color: var(--c);
     font-weight: 600;
     font-variant-numeric: tabular-nums;

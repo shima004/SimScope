@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { EntityURN } from "$lib/rcrs/urns";
   import {
     currentStep,
@@ -73,7 +74,7 @@
   <div class="panel">
     {#if result !== null}
       <div class="row">
-        <span class="label">Score</span>
+        <span class="label">{$t("score.score")}</span>
         <span class="value"
           >{result.score.toFixed(2)}<span class="max">
             / {result.maxScore}</span
@@ -83,7 +84,7 @@
     {/if}
     {#if refugeResult !== null && result !== null}
       <div class="row">
-        <span class="label">Injured in Refuge</span>
+        <span class="label">{$t("score.injuredInRefuge")}</span>
         <span class="value"
           >{refugeResult.inRefuge}<span class="max">
             / {refugeResult.injured}</span
@@ -93,7 +94,7 @@
     {/if}
     {#if blockadeResult !== null}
       <div class="row">
-        <span class="label">Blockade Cleared</span>
+        <span class="label">{$t("score.blockadeCleared")}</span>
         <span class="value"
           >{blockadeResult.pct.toFixed(1)}<span class="max">%</span></span
         >
@@ -102,12 +103,12 @@
     {#if agentCounts.fb + agentCounts.at + agentCounts.pf > 0}
       <div class="divider"></div>
       <div class="agent-counts">
-        <span class="agent-item" title="Fire Brigade">🚒 {agentCounts.fb}</span>
-        <span class="agent-item" title="Ambulance Team"
+        <span class="agent-item" title={$t("entity.fireBrigade")}>🚒 {agentCounts.fb}</span>
+        <span class="agent-item" title={$t("entity.ambulanceTeam")}
           >🚑 {agentCounts.at}</span
         >
-        <span class="agent-item" title="Police Force">🚜 {agentCounts.pf}</span>
-        <span class="agent-item" title="Civilian">🧍 {agentCounts.cv}</span>
+        <span class="agent-item" title={$t("entity.policeForce")}>🚜 {agentCounts.pf}</span>
+        <span class="agent-item" title={$t("entity.civilian")}>🧍 {agentCounts.cv}</span>
       </div>
     {/if}
   </div>
@@ -117,11 +118,12 @@
   .panel {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     background: rgba(13, 20, 30, 0.92);
     border: 1px solid rgba(0, 200, 255, 0.2);
     border-radius: 6px;
-    padding: 6px 12px;
+    padding: 5px 12px;
+    line-height: 1.2;
     backdrop-filter: blur(6px);
     box-shadow: 0 0 20px rgba(0, 180, 255, 0.08);
     z-index: 10;
@@ -129,6 +131,7 @@
 
   .label {
     font-size: 10px;
+    line-height: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -137,6 +140,7 @@
 
   .value {
     font-size: 16px;
+    line-height: 18px;
     font-variant-numeric: tabular-nums;
     color: #c8d8e8;
     font-weight: 600;
@@ -147,6 +151,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    min-height: 18px;
   }
 
   .divider {
@@ -159,16 +164,19 @@
     display: flex;
     gap: 10px;
     justify-content: space-between;
+    min-height: 14px;
   }
 
   .agent-item {
     font-size: 12px;
+    line-height: 15px;
     color: #a8c8d8;
     font-variant-numeric: tabular-nums;
   }
 
   .max {
     font-size: 12px;
+    line-height: 15px;
     color: #607080;
     font-weight: 400;
   }
