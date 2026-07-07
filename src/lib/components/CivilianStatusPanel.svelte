@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import type { HumanEntity, SimEntity } from "$lib/rcrs/types";
   import { CommandURN, EntityURN, entityColor, isAgent } from "$lib/rcrs/urns";
   import {
@@ -179,10 +180,10 @@
       onclick={() => (collapsed = !collapsed)}
       onkeydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
     >
-      <span class="panel-label">Civilian Status</span>
+      <span class="panel-label">{$t("civilian.title")}</span>
       {#if mergedCarried && !collapsed}
-        <span class="ch-col perceived">👁 Perceived</span>
-        <span class="ch-col actual">Actual</span>
+        <span class="ch-col perceived">👁 {$t("civilian.perceived")}</span>
+        <span class="ch-col actual">{$t("civilian.actual")}</span>
       {/if}
       <span class="collapse-arrow">{collapsed ? "▸" : "▾"}</span>
     </div>
@@ -191,7 +192,7 @@
       {#if mergedCarried}
         <!-- Carrying -->
         {#if mergedCarried.length > 0}
-          <div class="section-label">Carrying ({mergedCarried.length})</div>
+          <div class="section-label">{$t("section.carrying")} ({mergedCarried.length})</div>
           {#each mergedCarried as row (row.id)}
             {@const rep = row.p?.civilian ?? row.a!.civilian}
             <button
@@ -236,7 +237,7 @@
 
         <!-- Rescuing -->
         {#if mergedRescued && mergedRescued.length > 0}
-          <div class="section-label">Rescuing ({mergedRescued.length})</div>
+          <div class="section-label">{$t("section.rescuing")} ({mergedRescued.length})</div>
           {#each mergedRescued as row (row.id)}
             {@const rep = row.p ?? row.a!}
             <button
@@ -281,7 +282,7 @@
 
         <!-- Injured Civilians (dual) -->
         {#if mergedInjured && mergedInjured.length > 0}
-          <div class="section-label">Injured ({mergedInjured.length})</div>
+          <div class="section-label">{$t("section.injured")} ({mergedInjured.length})</div>
           {#each mergedInjured as row (row.id)}
             {@const rep = row.p ?? row.a!}
             <button
@@ -326,7 +327,7 @@
 
         <!-- Buried -->
         {#if mergedBuried && mergedBuried.length > 0}
-          <div class="section-label">Buried ({mergedBuried.length})</div>
+          <div class="section-label">{$t("section.buried")} ({mergedBuried.length})</div>
           {#each mergedBuried as row (row.id)}
             {@const rep = row.p ?? row.a!}
             <button
@@ -367,7 +368,7 @@
       {:else}
         <!-- ── single column (normal mode) ── -->
         {#if carriedActual.length > 0}
-          <div class="section-label">Carrying ({carriedActual.length})</div>
+          <div class="section-label">{$t("section.carrying")} ({carriedActual.length})</div>
           {#each carriedActual as { civilian: c, carrier } (c.id)}
             <button
               class="row"
@@ -393,7 +394,7 @@
         {/if}
 
         {#if rescuedActual.length > 0}
-          <div class="section-label">Rescuing ({rescuedActual.length})</div>
+          <div class="section-label">{$t("section.rescuing")} ({rescuedActual.length})</div>
           {#each rescuedActual as c (c.id)}
             <button
               class="row"
@@ -422,7 +423,7 @@
         {/if}
 
         {#if injuredActual.length > 0}
-          <div class="section-label">Injured ({injuredActual.length})</div>
+          <div class="section-label">{$t("section.injured")} ({injuredActual.length})</div>
           {#each injuredActual as c (c.id)}
             <button
               class="row"
@@ -446,7 +447,7 @@
         {/if}
 
         {#if buriedActual.length > 0}
-          <div class="section-label">Buried ({buriedActual.length})</div>
+          <div class="section-label">{$t("section.buried")} ({buriedActual.length})</div>
           {#each buriedActual as c (c.id)}
             <button
               class="row"
@@ -489,13 +490,14 @@
     border-radius: 6px;
     color: #c8d8e8;
     font-size: 12px;
+    line-height: 1.2;
     backdrop-filter: blur(6px);
     box-shadow: 0 0 20px rgba(0, 180, 255, 0.08);
     z-index: 10;
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    padding-bottom: 8px;
+    gap: 1px;
+    padding-bottom: 5px;
   }
 
   .panel.dual {
@@ -510,7 +512,8 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 8px 10px 6px;
+    min-height: 28px;
+    padding: 6px 10px 5px;
     border-bottom: 1px solid rgba(0, 200, 255, 0.1);
     flex-shrink: 0;
     cursor: pointer;
@@ -522,6 +525,7 @@
 
   .panel-label {
     font-size: 10px;
+    line-height: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -540,6 +544,7 @@
 
   .ch-col {
     font-size: 9px;
+    line-height: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -556,14 +561,15 @@
 
   .section-label {
     font-size: 10px;
+    line-height: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #00c8ff;
-    padding: 4px 10px 2px;
+    padding: 2px 10px 0;
   }
   :is(.row, .dual-row) + .section-label {
-    margin-top: 4px;
+    margin-top: 2px;
     border-top: 1px solid rgba(0, 200, 255, 0.1);
   }
 
@@ -571,8 +577,9 @@
   .dual-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 3px 10px;
+    gap: 5px;
+    min-height: 19px;
+    padding: 1px 10px;
     border-radius: 3px;
     cursor: pointer;
     background: none;
@@ -593,13 +600,14 @@
   .dual-row {
     display: grid;
     grid-template-columns: 72px 1fr 1fr;
-    gap: 4px;
+    gap: 3px;
     align-items: center;
   }
 
   .cid {
     color: #607080;
     font-size: 11px;
+    line-height: 13px;
     flex-shrink: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -616,7 +624,7 @@
   .stat {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     flex: 1;
   }
 
@@ -640,6 +648,7 @@
 
   .num {
     font-size: 10px;
+    line-height: 12px;
     color: #a8c8d8;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
@@ -647,7 +656,8 @@
 
   .badge {
     font-size: 10px;
-    padding: 1px 3px;
+    line-height: 12px;
+    padding: 0 3px;
     border-radius: 3px;
     flex-shrink: 0;
     min-width: 24px;

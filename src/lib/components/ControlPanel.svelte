@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SimEntity } from "$lib/rcrs/types";
+  import { locale, setLocale, t } from "$lib/i18n";
   import { EntityURN, isAgent, isCommandCenter } from "$lib/rcrs/urns";
   import {
     agentActions,
@@ -334,34 +335,34 @@
     onclick={() => (inputsCollapsed = !inputsCollapsed)}
     onkeydown={(e) => e.key === "Enter" && (inputsCollapsed = !inputsCollapsed)}
   >
-    <span class="section-label">Connection</span>
+    <span class="section-label">{$t("control.connection")}</span>
     <span class="collapse-arrow">{inputsCollapsed ? "▸" : "▾"}</span>
   </div>
 
   {#if !inputsCollapsed}
     <!-- WebSocket section -->
     <section>
-      <span class="section-label">TCP Server</span>
+      <span class="section-label">{$t("control.tcpServer")}</span>
       <div class="row">
         <input
           class="url-input"
           bind:value={tcpHost}
-          placeholder="host"
+          placeholder={$t("control.host")}
           disabled={$mode === "ws"}
         />
         <input
           class="port-input"
           bind:value={tcpPort}
-          placeholder="port"
+          placeholder={$t("control.port")}
           disabled={$mode === "ws"}
         />
         {#if $connected || $mode === "ws"}
-          <button class="btn danger" onclick={disconnectWS}>Cut</button>
+          <button class="btn danger" onclick={disconnectWS}>{$t("control.cut")}</button>
         {:else}
           <button
             class="btn primary"
             onclick={handleConnect}
-            disabled={$loading}>Connect</button
+            disabled={$loading}>{$t("control.connect")}</button
           >
         {/if}
       </div>
@@ -371,23 +372,23 @@
           class:online={$mode === "ws"}
           class:offline={$mode !== "ws"}
         >
-          {$mode === "ws" ? "● Connected" : "○ Connecting…"}
+          {$mode === "ws" ? `● ${$t("control.connected")}` : `○ ${$t("control.connecting")}`}
         </div>
       {/if}
     </section>
 
-    <div class="divider">or</div>
+    <div class="divider">{$t("control.or")}</div>
 
     <!-- File section -->
     <section>
-      <span class="section-label">Log File</span>
+      <span class="section-label">{$t("control.logFile")}</span>
       <div class="row">
         <button
           class="btn primary"
           onclick={() => fileInput?.click()}
           disabled={$loading}
         >
-          {$loading ? "Loading…" : "Open 7z tgz tar.gz xz log file"}
+          {$loading ? $t("loading.loading") : $t("control.openLogFile")}
         </button>
         <input
           bind:this={fileInput}
@@ -407,7 +408,7 @@
         <button
           class="btn primary"
           onclick={() => loadUrl(logUrl)}
-          disabled={$loading || !logUrl}>Load</button
+          disabled={$loading || !logUrl}>{$t("control.load")}</button
         >
       </div>
     </section>
@@ -421,7 +422,7 @@
   {#if $mode === "file" && $maxStep > 0}
     <section class="timeline">
       <div class="timeline-header">
-        <span class="section-label">Step</span>
+        <span class="section-label">{$t("control.step")}</span>
         <span class="step-counter">{$currentStep} / {$maxStep}</span>
       </div>
       <input
@@ -436,12 +437,12 @@
           class="btn icon"
           onclick={stepBack}
           disabled={$currentStep <= 0}
-          aria-label="1ステップ戻る">⏮</button
+          aria-label={$t("control.stepBack")}>⏮</button
         >
         <button
           class="btn icon play"
           onclick={togglePlay}
-          aria-label={playing ? "一時停止" : "自動再生"}
+          aria-label={playing ? $t("control.pause") : $t("control.play")}
         >
           {playing ? "⏸" : "▶"}
         </button>
@@ -449,21 +450,21 @@
           class="btn icon"
           onclick={stepForward}
           disabled={$currentStep >= $maxStep}
-          aria-label="1ステップ進む">⏭</button
+          aria-label={$t("control.stepForward")}>⏭</button
         >
         <button
           class="btn icon loop"
           class:active={loopMode}
           onclick={() => { loopMode = !loopMode; if (!loopMode) stopPlayback(); }}
-          title={loopMode ? "ループ再生オフ" : "ループ再生オン"}
-          aria-label="ループ再生">🔁</button
+          title={loopMode ? $t("control.loopOff") : $t("control.loopOn")}
+          aria-label={$t("control.loop")}>🔁</button
         >
         <button
           class="btn icon"
           class:active={$agentDisplayMode === "emoji"}
           onclick={() => agentDisplayMode.update((v) => (v === "emoji" ? "circle" : "emoji"))}
-          title={$agentDisplayMode === "emoji" ? "絵文字モード（クリックで切替）" : "Circleモード（クリックで切替）"}
-          aria-label="エージェント表示切替">{$agentDisplayMode === "emoji" ? "🚒" : "⬤"}</button
+          title={$agentDisplayMode === "emoji" ? $t("control.emojiMode") : $t("control.circleMode")}
+          aria-label={$t("control.agentDisplay")}>{$agentDisplayMode === "emoji" ? "🚒" : "⬤"}</button
         >
         <div class="speed-btns">
           {#each SPEEDS as s}
@@ -476,7 +477,7 @@
         </div>
       </div>
       {#if loopCountdown !== null}
-        <div class="loop-countdown">{loopCountdown}s でループ再開</div>
+        <div class="loop-countdown">{$t("control.loopRestart", { seconds: loopCountdown })}</div>
       {/if}
     </section>
   {/if}
@@ -488,7 +489,7 @@
       : null}
     <section class="timeline">
       <div class="timeline-header">
-        <span class="section-label">Step</span>
+        <span class="section-label">{$t("control.step")}</span>
         <span class="step-counter"
           >{$currentStep}{wsMaxStep ? ` / ${wsMaxStep}` : ""}</span
         >
@@ -502,14 +503,14 @@
         <button
           class="btn follow icon-btn"
           onclick={() => (showConfig = true)}
-          title="Kernel Config">⚙️</button
+          title={$t("control.kernelConfig")}>⚙️</button
         >
       {/if}
       <button
         class="btn follow"
         class:active={$followMode}
         onclick={() => followMode.update((v) => !v)}
-        title="選択中のエージェントに追従">Follow</button
+        title={$t("control.followTitle")}>{$t("control.follow")}</button
       >
 
       {#if $mode === "file"}
@@ -521,32 +522,46 @@
               $selectedEntity?.urn === EntityURN.CIVILIAN) &&
             !isCommandCenter($selectedEntity?.urn ?? 0)}
           onclick={() => perceptionViewMode.update((v) => !v)}
-          title="選択エージェントの知覚世界を表示">Perception</button
+          title={$t("control.perceptionTitle")}>{$t("control.perception")}</button
         >
       {/if}
     </div>
   {/if}
 
-  <a
-    class="github-link"
-    href="https://github.com/shima004/SimScope"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
-      <path
-        d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
-        0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
-        -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
-        .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
-        -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
-        .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
-        .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
-        0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
-      />
-    </svg>
-    GitHub
-  </a>
+  <div class="footer-row">
+    <a
+      class="github-link"
+      href="https://github.com/shima004/SimScope"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+        <path
+          d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+          0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+          -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+          .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+          -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+          .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+          .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+          0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+        />
+      </svg>
+      GitHub
+    </a>
+    <div class="lang-switch" aria-label={$t("common.language")}>
+      <button
+        class:active={$locale === "en"}
+        onclick={() => setLocale("en")}
+        aria-pressed={$locale === "en"}>{$t("language.en")}</button
+      >
+      <button
+        class:active={$locale === "ja"}
+        onclick={() => setLocale("ja")}
+        aria-pressed={$locale === "ja"}>{$t("language.ja")}</button
+      >
+    </div>
+  </div>
 </div>
 
 <!-- Kernel config overlay -->
@@ -566,7 +581,7 @@
       onkeydown={(e) => e.stopPropagation()}
     >
       <div class="overlay-header">
-        <span class="section-label">Kernel Config</span>
+        <span class="section-label">{$t("control.kernelConfig")}</span>
         <button class="close-btn" onclick={() => (showConfig = false)}>✕</button
         >
       </div>
@@ -584,7 +599,7 @@
                 {#each entries as { subkey, value }}
                   <div class="config-row">
                     <span class="config-key" title={subkey}
-                      >{subkey || "(value)"}</span
+                      >{subkey || $t("control.value")}</span
                     >
                     <span class="config-val">{value}</span>
                   </div>
@@ -606,19 +621,50 @@
     border-radius: 6px;
     color: #c8d8e8;
     font-size: 13px;
-    padding: 12px;
+    padding: 10px;
     backdrop-filter: blur(6px);
     box-shadow: 0 0 20px rgba(0, 180, 255, 0.08);
     z-index: 10;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    line-height: 1.2;
+  }
+
+  .lang-switch {
+    display: flex;
+    border: 1px solid rgba(0, 200, 255, 0.2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .lang-switch button {
+    min-width: 34px;
+    height: 22px;
+    border: none;
+    border-right: 1px solid rgba(0, 200, 255, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: #607080;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .lang-switch button:last-child {
+    border-right: none;
+  }
+
+  .lang-switch button.active {
+    background: rgba(0, 200, 255, 0.16);
+    color: #00c8ff;
   }
 
   .inputs-header {
     display: flex;
     align-items: center;
-    padding: 4px 2px;
+    min-height: 19px;
+    padding: 3px 2px;
     cursor: pointer;
     user-select: none;
     border-radius: 4px;
@@ -641,6 +687,7 @@
   .section-label {
     display: block;
     font-size: 10px;
+    line-height: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -661,6 +708,8 @@
     border-radius: 4px;
     color: #c8d8e8;
     font-size: 12px;
+    height: 26px;
+    line-height: 16px;
     padding: 5px 8px;
     min-width: 0;
   }
@@ -675,6 +724,8 @@
     border-radius: 4px;
     color: #c8d8e8;
     font-size: 12px;
+    height: 26px;
+    line-height: 16px;
     padding: 5px 6px;
   }
   .port-input:disabled {
@@ -682,11 +733,16 @@
   }
 
   .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 26px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-size: 12px;
-    padding: 5px 10px;
+    line-height: 1;
+    padding: 4px 9px;
     white-space: nowrap;
   }
   .btn.primary {
@@ -708,7 +764,7 @@
 
   .btn.icon-btn {
     flex: 0;
-    padding: 6px 10px;
+    padding: 4px 9px;
   }
 
   .btn.follow {
@@ -740,6 +796,7 @@
 
   .status {
     font-size: 11px;
+    line-height: 14px;
     margin-top: 4px;
   }
   .status.online {
@@ -753,6 +810,7 @@
     text-align: center;
     color: #405060;
     font-size: 11px;
+    line-height: 13px;
     position: relative;
   }
 
@@ -779,6 +837,7 @@
 
   .step-counter {
     font-size: 11px;
+    line-height: 12px;
     color: #a8c8d8;
     font-variant-numeric: tabular-nums;
   }
@@ -804,6 +863,7 @@
 
   .btn.speed {
     font-size: 10px;
+    min-height: 20px;
     padding: 3px 5px;
     border: 1px solid rgba(0, 200, 255, 0.3);
     color: #607080;
@@ -825,6 +885,7 @@
     color: #a8c8d8;
     padding: 4px 10px;
     font-size: 11px;
+    min-height: 22px;
     border-radius: 4px;
   }
 
@@ -836,6 +897,7 @@
 
   .loop-countdown {
     font-size: 10px;
+    line-height: 12px;
     color: #607080;
     text-align: center;
     padding: 3px 0 0;
@@ -980,13 +1042,23 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .footer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 22px;
+  }
+
   .github-link {
     display: flex;
     align-items: center;
     gap: 5px;
-    padding: 4px 2px;
+    min-height: 22px;
+    padding: 3px 2px;
     color: #8b949e;
     font-size: 11px;
+    line-height: 1;
     font-family: monospace;
     text-decoration: none;
     transition: color 0.15s;
