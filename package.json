@@ -1,7 +1,7 @@
 {
   "name": "simscope",
   "private": true,
-  "version": "1.0.22",
+  "version": "1.0.24",
   "license": "MIT",
   "type": "module",
   "engines": {
