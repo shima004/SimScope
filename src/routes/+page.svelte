@@ -8,6 +8,7 @@
   import SimMap from "$lib/components/SimMap.svelte";
   import TeamNamePanel from "$lib/components/TeamNamePanel.svelte";
   import TimelinePanel from "$lib/components/TimelinePanel.svelte";
+  import { t } from "$lib/i18n";
   import {
     downloadProgress,
     downloadSize,
@@ -76,7 +77,7 @@
       class:open={timelineOpen}
       style="left:{timelineOpen ? TIMELINE_WIDTH : 0}px"
       onclick={() => (timelineOpen = !timelineOpen)}
-      title={timelineOpen ? "Close timeline" : "Open timeline"}
+      title={timelineOpen ? $t("timeline.close") : $t("timeline.open")}
     >
       {timelineOpen ? "◂" : "▸"}
     </button>
@@ -109,16 +110,16 @@
           </div>
           <span>
             {#if $downloadProgress < 0}
-              Downloading…{$downloadSize !== null ? ` (${fmtBytes($downloadSize)})` : ""}
+              {$t("loading.downloading")}{$downloadSize !== null ? ` (${fmtBytes($downloadSize)})` : ""}
             {:else}
-              Downloading… {Math.round($downloadProgress * 100)}%{$downloadSize !== null ? ` / ${fmtBytes($downloadSize)}` : ""}
+              {$t("loading.downloading")} {Math.round($downloadProgress * 100)}%{$downloadSize !== null ? ` / ${fmtBytes($downloadSize)}` : ""}
             {/if}
           </span>
         {:else if $extractProgress !== null}
           <div class="progress-wrap">
             <div class="progress-bar" style="width:{$extractProgress}%"></div>
           </div>
-          <span>Extracting… {$extractProgress}%</span>
+          <span>{$t("loading.extracting")} {$extractProgress}%</span>
         {:else if $parseProgress !== null}
           <div class="progress-wrap">
             <div
@@ -126,9 +127,9 @@
               style="width:{$parseProgress * 100}%"
             ></div>
           </div>
-          <span>Parsing… {Math.round($parseProgress * 100)}%</span>
+          <span>{$t("loading.parsing")} {Math.round($parseProgress * 100)}%</span>
         {:else}
-          <span>Loading…</span>
+          <span>{$t("loading.loading")}</span>
         {/if}
       </div>
     </div>
@@ -175,6 +176,7 @@
     border-radius: 0 6px 6px 0;
     color: #00e0ff;
     font-size: 12px;
+    line-height: 1;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -220,6 +222,7 @@
     gap: 12px;
     color: #00c8ff;
     font-size: 14px;
+    line-height: 17px;
     font-family: monospace;
     min-width: 200px;
   }

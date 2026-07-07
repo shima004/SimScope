@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import type { HumanEntity } from "$lib/rcrs/types";
-  import { EntityURN, EntityURNLabel, entityColor } from "$lib/rcrs/urns";
+  import { EntityURN, entityColor } from "$lib/rcrs/urns";
   import {
     agentActions,
     currentStep,
@@ -39,6 +40,19 @@
 
   const ignoreUntil = $derived(Number($kernelConfig["kernel.agents.ignoreuntil"] ?? 0));
 
+  function entityLabel(urn: number): string {
+    switch (urn) {
+      case EntityURN.FIRE_BRIGADE:
+        return $t("entity.fireBrigade");
+      case EntityURN.AMBULANCE_TEAM:
+        return $t("entity.ambulanceTeam");
+      case EntityURN.POLICE_FORCE:
+        return $t("entity.policeForce");
+      default:
+        return `URN:${urn}`;
+    }
+  }
+
   const idleGroups = $derived.by((): IdleGroup[] => {
     if ($currentStep === 0 || $currentStep < ignoreUntil) return [];
     const groups: IdleGroup[] = [];
@@ -56,7 +70,7 @@
       if (idle.length > 0) {
         groups.push({
           urn,
-          label: EntityURNLabel[urn] ?? `URN:${urn}`,
+          label: entityLabel(urn),
           agents: idle.sort((a, b) => a.id - b.id),
           total: all.length,
         });
@@ -88,7 +102,7 @@
       onclick={() => (collapsed = !collapsed)}
       onkeydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
     >
-      <span class="panel-label">Idle Agents</span>
+      <span class="panel-label">{$t("idle.title")}</span>
       <span class="collapse-arrow">{collapsed ? "▸" : "▾"}</span>
     </div>
 
@@ -130,6 +144,7 @@
     border-radius: 6px;
     color: #c8d8e8;
     font-size: 12px;
+    line-height: 1.2;
     backdrop-filter: blur(6px);
     transition: left 0.25s ease;
     box-shadow: 0 0 20px rgba(0, 180, 255, 0.08);
@@ -148,7 +163,8 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 8px 10px 6px;
+    min-height: 28px;
+    padding: 6px 10px 5px;
     border-bottom: 1px solid rgba(0, 200, 255, 0.1);
     flex-shrink: 0;
     cursor: pointer;
@@ -160,6 +176,7 @@
 
   .panel-label {
     font-size: 10px;
+    line-height: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -178,11 +195,12 @@
 
   .section-label {
     font-size: 10px;
+    line-height: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #00c8ff;
-    padding: 4px 10px 2px;
+    padding: 3px 10px 1px;
   }
 
   :is(.row) + .section-label {
@@ -194,7 +212,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 3px 10px;
+    min-height: 21px;
+    padding: 2px 10px;
     border-radius: 3px;
     cursor: pointer;
     background: none;
@@ -212,6 +231,7 @@
 
   .cid {
     font-size: 11px;
+    line-height: 13px;
     flex-shrink: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -245,6 +265,7 @@
 
   .num {
     font-size: 10px;
+    line-height: 12px;
     color: #a8c8d8;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
@@ -252,6 +273,7 @@
 
   .badge {
     font-size: 10px;
+    line-height: 12px;
     padding: 1px 3px;
     border-radius: 3px;
     flex-shrink: 0;

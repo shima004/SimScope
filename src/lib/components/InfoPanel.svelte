@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { channelColorCSS } from "$lib/rcrs/channelColors";
   import type {
     AreaEntity,
@@ -9,10 +10,8 @@
     RefugeEntity,
   } from "$lib/rcrs/types";
   import {
-    CommandURNLabel,
+    CommandURN,
     EntityURN,
-    EntityURNLabel,
-    FIERYNESS_LABEL,
     entityColor,
     isAgent,
     isCommandCenter,
@@ -33,7 +32,94 @@
   import { get } from "svelte/store";
 
   function typeLabel(urn: number) {
-    return EntityURNLabel[urn] ?? `URN:${urn}`;
+    switch (urn) {
+      case EntityURN.WORLD:
+        return $t("entity.world");
+      case EntityURN.ROAD:
+        return $t("entity.road");
+      case EntityURN.BLOCKADE:
+        return $t("entity.blockade");
+      case EntityURN.BUILDING:
+        return $t("entity.building");
+      case EntityURN.REFUGE:
+        return $t("entity.refuge");
+      case EntityURN.HYDRANT:
+        return $t("entity.hydrant");
+      case EntityURN.GAS_STATION:
+        return $t("entity.gasStation");
+      case EntityURN.FIRE_STATION:
+        return $t("entity.fireStation");
+      case EntityURN.AMBULANCE_CENTRE:
+        return $t("entity.ambulanceCentre");
+      case EntityURN.POLICE_OFFICE:
+        return $t("entity.policeOffice");
+      case EntityURN.CIVILIAN:
+        return $t("entity.civilian");
+      case EntityURN.FIRE_BRIGADE:
+        return $t("entity.fireBrigade");
+      case EntityURN.AMBULANCE_TEAM:
+        return $t("entity.ambulanceTeam");
+      case EntityURN.POLICE_FORCE:
+        return $t("entity.policeForce");
+      default:
+        return `URN:${urn}`;
+    }
+  }
+
+  function commandLabel(urn: number) {
+    switch (urn) {
+      case CommandURN.AK_REST:
+        return $t("command.rest");
+      case CommandURN.AK_MOVE:
+        return $t("command.move");
+      case CommandURN.AK_LOAD:
+        return $t("command.load");
+      case CommandURN.AK_UNLOAD:
+        return $t("command.unload");
+      case CommandURN.AK_SAY:
+        return $t("command.say");
+      case CommandURN.AK_TELL:
+        return $t("command.tell");
+      case CommandURN.AK_EXTINGUISH:
+        return $t("command.extinguish");
+      case CommandURN.AK_RESCUE:
+        return $t("command.rescue");
+      case CommandURN.AK_CLEAR:
+        return $t("command.clear");
+      case CommandURN.AK_CLEAR_AREA:
+        return $t("command.clearArea");
+      case CommandURN.AK_SUBSCRIBE:
+        return $t("command.subscribe");
+      case CommandURN.AK_SPEAK:
+        return $t("command.speak");
+      default:
+        return `0x${urn.toString(16)}`;
+    }
+  }
+
+  function fierynessLabel(value: number) {
+    switch (value) {
+      case 0:
+        return $t("fieryness.0");
+      case 1:
+        return $t("fieryness.1");
+      case 2:
+        return $t("fieryness.2");
+      case 3:
+        return $t("fieryness.3");
+      case 4:
+        return $t("fieryness.4");
+      case 5:
+        return $t("fieryness.5");
+      case 6:
+        return $t("fieryness.6");
+      case 7:
+        return $t("fieryness.7");
+      case 8:
+        return $t("fieryness.8");
+      default:
+        return String(value);
+    }
   }
 
   function findCarriedCivilian(ambulanceId: number): HumanEntity | null {
@@ -73,9 +159,9 @@
   <div class="props">
     {#if e}
       <!-- Position -->
-      {#if "x" in e && "y" in e}
+      {#if "x" in e && "y" in e && !("hp" in e)}
         <div class="row">
-          <span class="key">Position</span>
+          <span class="key">{$t("info.position")}</span>
           <span class="val"
             >{(e as AreaEntity).x.toLocaleString()}, {(
               e as AreaEntity
@@ -88,13 +174,13 @@
       {#if "fieryness" in e}
         {@const b = e as BuildingEntity}
         <div class="row">
-          <span class="key">Fieryness</span>
+          <span class="key">{$t("info.fieryness")}</span>
           <span class="val fiery-{b.fieryness}"
-            >{FIERYNESS_LABEL[b.fieryness] ?? b.fieryness}</span
+            >{fierynessLabel(b.fieryness)}</span
           >
         </div>
         <div class="row">
-          <span class="key">Brokenness</span>
+          <span class="key">{$t("info.brokenness")}</span>
           <span class="val">
             <span class="bar-wrap"
               ><span class="bar" style="width:{b.brokenness}%"></span></span
@@ -103,11 +189,11 @@
           </span>
         </div>
         <div class="row">
-          <span class="key">Temperature</span>
+          <span class="key">{$t("info.temperature")}</span>
           <span class="val">{b.temperature} °C</span>
         </div>
         <div class="row">
-          <span class="key">Floors</span>
+          <span class="key">{$t("info.floors")}</span>
           <span class="val">{b.floors}</span>
         </div>
       {/if}
@@ -116,50 +202,8 @@
       {#if "hp" in e}
         {@const h = e as HumanEntity}
         {@const action = $agentActions.get(e.id)}
-        {#if action}
-          <div class="row">
-            <span class="key">Action</span>
-            <span class="val action-label"
-              >{CommandURNLabel[action.urn] ??
-                `0x${action.urn.toString(16)}`}</span
-            >
-          </div>
-          {#if action.path && action.path.length > 0}
-            {@const dest = action.path[action.path.length - 1]}
-            <div class="row">
-              <span class="key">Dest</span>
-              <button class="val link" onclick={() => {
-                if (get(pinnedAgentId) !== null) inspectedId.set(dest);
-                else selectedId.set(dest);
-                const de = $entities.get(dest);
-                if (de && "x" in de) focusPoint.set({ x: (de as { x: number; y: number }).x, y: (de as { x: number; y: number }).y });
-              }}>#{dest}</button>
-            </div>
-          {/if}
-        {/if}
-        {@const commStat = $agentCommStats.get(e.id)}
-        {#if commStat && commStat.speak > 0}
-          <div class="row">
-            <span class="key">Speak</span>
-            <span class="val"
-              >{commStat.speak}<span class="unit"> msg</span> · {commStat.bytes}<span
-                class="unit"
-              >
-                B</span
-              ></span
-            >
-          </div>
-        {/if}
-        {@const subChannels = [
-          ...new Set([0, ...($agentSubscriptions.get(e.id) ?? [])]),
-        ].sort((a, b) => a - b)}
         <div class="row">
-          <span class="key">Subscribe</span>
-          <span class="val">{subChannels.map((c) => `ch.${c}`).join(", ")}</span
-          >
-        </div>
-        <div class="row">
-          <span class="key">HP</span>
+          <span class="key">{$t("info.hp")}</span>
           <span class="val">
             <span class="bar-wrap"
               ><span class="bar hp" style="width:{Math.min(100, h.hp / 100)}%"
@@ -169,21 +213,78 @@
           </span>
         </div>
         <div class="row">
-          <span class="key">Damage</span>
+          <span class="key">{$t("info.damage")}</span>
           <span class="val">{h.damage.toLocaleString()}</span>
         </div>
         <div class="row">
-          <span class="key">Buriedness</span>
+          <span class="key">{$t("info.buriedness")}</span>
           <span class="val">{h.buriedness}</span>
         </div>
+        {#if action}
+          {@const dest = action.path && action.path.length > 0
+            ? action.path[action.path.length - 1]
+            : null}
+          <div class="row">
+            <span class="key">{$t("info.action")}</span>
+            <span class="val action-label">
+              {commandLabel(action.urn)}
+              {#if dest !== null}
+                <span class="action-arrow">-&gt;</span>
+                <button class="link" onclick={() => {
+                  if (get(pinnedAgentId) !== null) inspectedId.set(dest);
+                  else selectedId.set(dest);
+                  const de = $entities.get(dest);
+                  if (de && "x" in de) focusPoint.set({ x: (de as { x: number; y: number }).x, y: (de as { x: number; y: number }).y });
+                }}>#{dest}</button>
+              {/if}
+            </span>
+          </div>
+        {/if}
+        {@const subChannels = [
+          ...new Set([0, ...($agentSubscriptions.get(e.id) ?? [])]),
+        ].sort((a, b) => a - b)}
         <div class="row">
-          <span class="key">Stamina</span>
-          <span class="val">{h.stamina.toLocaleString()}</span>
+          <span class="key">{$t("info.subscribe")}</span>
+          <span class="val">{subChannels.map((c) => `ch.${c}`).join(", ")}</span
+          >
         </div>
+        {@const commStat = $agentCommStats.get(e.id)}
+        {#if commStat && commStat.speak > 0}
+          <div class="row">
+            <span class="key">{$t("info.speak")}</span>
+            <span class="val"
+              >{commStat.speak}<span class="unit"> msg</span> · {commStat.bytes}<span
+                class="unit"
+              >
+                B</span
+              ></span
+            >
+          </div>
+        {/if}
+        {#if "x" in e && "y" in e}
+          <div class="row">
+            <span class="key">{$t("info.position")}</span>
+            <span class="val"
+              >{h.x.toLocaleString()}, {h.y.toLocaleString()}</span
+            >
+          </div>
+        {/if}
         <div class="row">
-          <span class="key">In Area</span>
+          <span class="key">{$t("info.inArea")}</span>
           <span class="val">#{h.position}</span>
         </div>
+        <div class="row">
+          <span class="key">{$t("info.stamina")}</span>
+          <span class="val">{h.stamina.toLocaleString()}</span>
+        </div>
+        {#if "waterQuantity" in e}
+          <div class="row">
+            <span class="key">{$t("info.water")}</span>
+            <span class="val"
+              >{(e as FireBrigadeEntity).waterQuantity.toLocaleString()} L</span
+            >
+          </div>
+        {/if}
       {/if}
 
       <!-- Refuge capacity -->
@@ -194,7 +295,7 @@
             ? Math.min(100, (r.occupiedBeds / r.bedCapacity) * 100)
             : 0}
         <div class="row">
-          <span class="key">Beds</span>
+          <span class="key">{$t("info.beds")}</span>
           <span class="val">
             <span class="bar-wrap"
               ><span class="bar refuge" style="width:{pct}%"></span></span
@@ -203,7 +304,7 @@
           </span>
         </div>
         <div class="row">
-          <span class="key">Waiting</span>
+          <span class="key">{$t("info.waiting")}</span>
           <span class="val">{r.waitingListSize}</span>
         </div>
       {/if}
@@ -212,9 +313,9 @@
       {#if e.urn === EntityURN.AMBULANCE_TEAM}
         {@const carried = findCarriedCivilian(e.id)}
         {#if carried}
-          <div class="section-label">Carrying #{carried.id}</div>
+          <div class="section-label">{$t("section.carrying")} #{carried.id}</div>
           <div class="row">
-            <span class="key">HP</span>
+              <span class="key">{$t("info.hp")}</span>
             <span class="val">
               <span class="bar-wrap"
                 ><span
@@ -226,40 +327,30 @@
             </span>
           </div>
           <div class="row">
-            <span class="key">Damage</span>
+            <span class="key">{$t("info.damage")}</span>
             <span class="val">{carried.damage.toLocaleString()}</span>
           </div>
           <div class="row">
-            <span class="key">Buriedness</span>
+            <span class="key">{$t("info.buriedness")}</span>
             <span class="val">{carried.buriedness}</span>
           </div>
           <button class="select-btn" onclick={() => selectedId.set(carried.id)}>
-            Select civilian →
+            {$t("info.selectCivilian")}
           </button>
         {:else}
-          <div class="section-label">No passenger</div>
+          <div class="section-label">{$t("info.noPassenger")}</div>
         {/if}
-      {/if}
-
-      <!-- Fire Brigade water -->
-      {#if "waterQuantity" in e}
-        <div class="row">
-          <span class="key">Water</span>
-          <span class="val"
-            >{(e as FireBrigadeEntity).waterQuantity.toLocaleString()} L</span
-          >
-        </div>
       {/if}
 
       <!-- Blockade -->
       {#if e.urn === EntityURN.BLOCKADE}
         {@const bl = e as BlockadeEntity}
         <div class="row">
-          <span class="key">Repair Cost</span>
+          <span class="key">{$t("info.repairCost")}</span>
           <span class="val">{bl.repairCost.toLocaleString()}</span>
         </div>
         <div class="row">
-          <span class="key">On Road</span>
+          <span class="key">{$t("info.onRoad")}</span>
           <span class="val">#{bl.position}</span>
         </div>
       {/if}
@@ -279,7 +370,7 @@
           (sum, msg) => sum + msg.count,
           0,
         )}
-        <div class="section-label">Communications ({commCount})</div>
+        <div class="section-label">{$t("info.communications")} ({commCount})</div>
         <div class="comm-ch-list">
           {#each subChs as ch}
             {@const msgs = byChannel.get(ch) ?? []}
@@ -329,7 +420,7 @@
                         : selectedId.set(msg.senderId)}
                   >
                     <span class="comm-type"
-                      >{EntityURNLabel[sender?.urn ?? 0] ?? "?"}</span
+                      >{sender ? typeLabel(sender.urn) : "?"}</span
                     >
                     #{msg.senderId}
                   </button>
@@ -366,13 +457,13 @@
               onclick={() => {
                 pinnedAgentId.set(e.id);
               }}
-              title="こちらをピン止めに切り替え">📌</button
+              title={$t("info.switchPin")}>📌</button
             >
           {/if}
           <button
             class="close-btn"
             onclick={() => inspectedId.set(null)}
-            aria-label="Close">✕</button
+            aria-label={$t("common.close")}>✕</button
           >
         </header>
         {@render entityProps(e, false)}
@@ -399,7 +490,7 @@
               class="pin-btn"
               class:active={$pinnedAgentId === e.id}
               onclick={() => togglePin(e.id)}
-              title={$pinnedAgentId === e.id ? "ピン止め解除" : "ピン止め"}
+              title={$pinnedAgentId === e.id ? $t("info.unpin") : $t("info.pin")}
               >📌</button
             >
           {/if}
@@ -409,7 +500,7 @@
               pinnedAgentId.set(null);
               selectedId.set(null);
             }}
-            aria-label="Close">✕</button
+            aria-label={$t("common.close")}>✕</button
           >
         </header>
         {@render entityProps(e, false)}
@@ -436,6 +527,7 @@
     border-radius: 6px;
     color: #c8d8e8;
     font-size: 13px;
+    line-height: 1.2;
     backdrop-filter: blur(6px);
     box-shadow: 0 0 20px rgba(0, 180, 255, 0.08);
     z-index: 10;
@@ -455,8 +547,9 @@
   header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 7px;
+    min-height: 34px;
+    padding: 8px 12px;
     border-bottom: 1px solid rgba(0, 200, 255, 0.1);
   }
 
@@ -466,6 +559,7 @@
 
   .type-badge {
     font-size: 11px;
+    line-height: 13px;
     font-weight: 600;
     color: #00c8ff;
     text-transform: uppercase;
@@ -476,9 +570,12 @@
     flex: 1;
     color: #607080;
     font-size: 11px;
+    line-height: 13px;
   }
 
   .pin-btn {
+    width: 16px;
+    height: 16px;
     background: none;
     border: none;
     font-size: 13px;
@@ -506,6 +603,8 @@
   }
 
   .close-btn {
+    width: 16px;
+    height: 16px;
     background: none;
     border: none;
     color: #607080;
@@ -519,10 +618,10 @@
   }
 
   .props {
-    padding: 8px 12px 12px;
+    padding: 6px 12px 10px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
   }
 
   .row {
@@ -530,11 +629,13 @@
     justify-content: space-between;
     align-items: center;
     gap: 8px;
+    min-height: 15px;
   }
 
   .key {
     color: #607080;
     flex-shrink: 0;
+    line-height: 15px;
   }
 
   .val {
@@ -543,6 +644,7 @@
     gap: 6px;
     text-align: right;
     color: #a8c8d8;
+    line-height: 15px;
   }
 
   .bar-wrap {
@@ -561,6 +663,7 @@
   }
   .unit {
     font-size: 10px;
+    line-height: 12px;
     color: #607080;
     font-weight: 400;
   }
@@ -570,6 +673,11 @@
     font-weight: 600;
   }
 
+  .action-arrow {
+    color: #607080;
+    font-weight: 400;
+  }
+
   .link {
     background: none;
     border: none;
@@ -577,6 +685,7 @@
     cursor: pointer;
     color: #00c8ff;
     font-size: inherit;
+    line-height: inherit;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -594,6 +703,7 @@
 
   .section-label {
     font-size: 10px;
+    line-height: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -604,13 +714,15 @@
   }
 
   .select-btn {
+    min-height: 20px;
     margin-top: 2px;
     background: none;
     border: 1px solid rgba(255, 200, 60, 0.3);
     border-radius: 4px;
     color: #ffc840;
     font-size: 11px;
-    padding: 3px 8px;
+    line-height: 1;
+    padding: 2px 8px;
     cursor: pointer;
     align-self: flex-start;
   }
@@ -630,10 +742,11 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    min-height: 22px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid color-mix(in srgb, var(--ch-color) 30%, transparent);
     border-radius: 4px;
-    padding: 4px 8px;
+    padding: 3px 8px;
     cursor: pointer;
     width: 100%;
     text-align: left;
@@ -644,6 +757,7 @@
 
   .ch-label {
     font-size: 11px;
+    line-height: 13px;
     font-weight: 600;
     color: var(--ch-color);
     min-width: 32px;
@@ -651,12 +765,14 @@
 
   .ch-count {
     font-size: 11px;
+    line-height: 13px;
     color: #a8c8d8;
     flex: 1;
   }
 
   .ch-arrow {
     font-size: 10px;
+    line-height: 12px;
     color: #607080;
   }
 
