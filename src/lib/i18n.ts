@@ -281,27 +281,43 @@ export function isLocale(value: string | null): value is Locale {
   return value === "en" || value === "ja";
 }
 
+function readStoredLocale(): Locale | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const storedLocale = window.localStorage.getItem(STORAGE_KEY);
+    return isLocale(storedLocale) ? storedLocale : null;
+  } catch {
+    return null;
+  }
+}
+
+function applyLocale(nextLocale: Locale, persist: boolean) {
+  locale.set(nextLocale);
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = nextLocale;
+  }
+  if (!persist || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, nextLocale);
+  } catch {
+    // Ignore storage failures such as private browsing restrictions.
+  }
+}
+
 export function initLocale() {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(window.location.search);
   const queryLocale = params.get("lang");
-  const storedLocale = window.localStorage.getItem(STORAGE_KEY);
+  const storedLocale = readStoredLocale();
   const browserLocale = window.navigator.language.toLowerCase().startsWith("ja")
     ? "ja"
     : "en";
-  locale.set(
-    isLocale(queryLocale)
-      ? queryLocale
-      : isLocale(storedLocale)
-        ? storedLocale
-        : browserLocale,
-  );
+  const nextLocale = isLocale(queryLocale)
+    ? queryLocale
+    : storedLocale ?? browserLocale;
+  applyLocale(nextLocale, isLocale(queryLocale));
 }
 
 export function setLocale(nextLocale: Locale) {
-  locale.set(nextLocale);
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY, nextLocale);
-    document.documentElement.lang = nextLocale;
-  }
+  applyLocale(nextLocale, true);
 }
