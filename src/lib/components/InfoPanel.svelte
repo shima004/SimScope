@@ -159,7 +159,7 @@
   <div class="props">
     {#if e}
       <!-- Position -->
-      {#if "x" in e && "y" in e}
+      {#if "x" in e && "y" in e && !("hp" in e)}
         <div class="row">
           <span class="key">{$t("info.position")}</span>
           <span class="val"
@@ -202,47 +202,6 @@
       {#if "hp" in e}
         {@const h = e as HumanEntity}
         {@const action = $agentActions.get(e.id)}
-        {#if action}
-          <div class="row">
-            <span class="key">{$t("info.action")}</span>
-            <span class="val action-label"
-              >{commandLabel(action.urn)}</span
-            >
-          </div>
-          {#if action.path && action.path.length > 0}
-            {@const dest = action.path[action.path.length - 1]}
-            <div class="row">
-              <span class="key">{$t("info.dest")}</span>
-              <button class="val link" onclick={() => {
-                if (get(pinnedAgentId) !== null) inspectedId.set(dest);
-                else selectedId.set(dest);
-                const de = $entities.get(dest);
-                if (de && "x" in de) focusPoint.set({ x: (de as { x: number; y: number }).x, y: (de as { x: number; y: number }).y });
-              }}>#{dest}</button>
-            </div>
-          {/if}
-        {/if}
-        {@const commStat = $agentCommStats.get(e.id)}
-        {#if commStat && commStat.speak > 0}
-          <div class="row">
-            <span class="key">{$t("info.speak")}</span>
-            <span class="val"
-              >{commStat.speak}<span class="unit"> msg</span> · {commStat.bytes}<span
-                class="unit"
-              >
-                B</span
-              ></span
-            >
-          </div>
-        {/if}
-        {@const subChannels = [
-          ...new Set([0, ...($agentSubscriptions.get(e.id) ?? [])]),
-        ].sort((a, b) => a - b)}
-        <div class="row">
-          <span class="key">{$t("info.subscribe")}</span>
-          <span class="val">{subChannels.map((c) => `ch.${c}`).join(", ")}</span
-          >
-        </div>
         <div class="row">
           <span class="key">{$t("info.hp")}</span>
           <span class="val">
@@ -261,14 +220,71 @@
           <span class="key">{$t("info.buriedness")}</span>
           <span class="val">{h.buriedness}</span>
         </div>
+        {#if action}
+          {@const dest = action.path && action.path.length > 0
+            ? action.path[action.path.length - 1]
+            : null}
+          <div class="row">
+            <span class="key">{$t("info.action")}</span>
+            <span class="val action-label">
+              {commandLabel(action.urn)}
+              {#if dest !== null}
+                <span class="action-arrow">-&gt;</span>
+                <button class="link" onclick={() => {
+                  if (get(pinnedAgentId) !== null) inspectedId.set(dest);
+                  else selectedId.set(dest);
+                  const de = $entities.get(dest);
+                  if (de && "x" in de) focusPoint.set({ x: (de as { x: number; y: number }).x, y: (de as { x: number; y: number }).y });
+                }}>#{dest}</button>
+              {/if}
+            </span>
+          </div>
+        {/if}
+        {@const subChannels = [
+          ...new Set([0, ...($agentSubscriptions.get(e.id) ?? [])]),
+        ].sort((a, b) => a - b)}
         <div class="row">
-          <span class="key">{$t("info.stamina")}</span>
-          <span class="val">{h.stamina.toLocaleString()}</span>
+          <span class="key">{$t("info.subscribe")}</span>
+          <span class="val">{subChannels.map((c) => `ch.${c}`).join(", ")}</span
+          >
         </div>
+        {@const commStat = $agentCommStats.get(e.id)}
+        {#if commStat && commStat.speak > 0}
+          <div class="row">
+            <span class="key">{$t("info.speak")}</span>
+            <span class="val"
+              >{commStat.speak}<span class="unit"> msg</span> · {commStat.bytes}<span
+                class="unit"
+              >
+                B</span
+              ></span
+            >
+          </div>
+        {/if}
+        {#if "x" in e && "y" in e}
+          <div class="row">
+            <span class="key">{$t("info.position")}</span>
+            <span class="val"
+              >{h.x.toLocaleString()}, {h.y.toLocaleString()}</span
+            >
+          </div>
+        {/if}
         <div class="row">
           <span class="key">{$t("info.inArea")}</span>
           <span class="val">#{h.position}</span>
         </div>
+        <div class="row">
+          <span class="key">{$t("info.stamina")}</span>
+          <span class="val">{h.stamina.toLocaleString()}</span>
+        </div>
+        {#if "waterQuantity" in e}
+          <div class="row">
+            <span class="key">{$t("info.water")}</span>
+            <span class="val"
+              >{(e as FireBrigadeEntity).waterQuantity.toLocaleString()} L</span
+            >
+          </div>
+        {/if}
       {/if}
 
       <!-- Refuge capacity -->
@@ -324,16 +340,6 @@
         {:else}
           <div class="section-label">{$t("info.noPassenger")}</div>
         {/if}
-      {/if}
-
-      <!-- Fire Brigade water -->
-      {#if "waterQuantity" in e}
-        <div class="row">
-          <span class="key">{$t("info.water")}</span>
-          <span class="val"
-            >{(e as FireBrigadeEntity).waterQuantity.toLocaleString()} L</span
-          >
-        </div>
       {/if}
 
       <!-- Blockade -->
@@ -665,6 +671,11 @@
   .action-label {
     color: #ffc840;
     font-weight: 600;
+  }
+
+  .action-arrow {
+    color: #607080;
+    font-weight: 400;
   }
 
   .link {
