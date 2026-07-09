@@ -16,6 +16,7 @@
     loading,
     loadUrl,
     maxStep,
+    mode,
     parseProgress,
     seekToStep,
   } from "$lib/stores/simulation";
@@ -56,31 +57,34 @@
 
   const TIMELINE_WIDTH = 300;
   const PANEL_GAP = 12;
-  const leftOffset = $derived(timelineOpen ? TIMELINE_WIDTH + PANEL_GAP : 0);
+  const timelineAvailable = $derived($mode !== "idle");
+  const leftOffset = $derived(timelineAvailable && timelineOpen ? TIMELINE_WIDTH + PANEL_GAP : 0);
 </script>
 
 <div class="app" data-loaded={dataLoaded ? "true" : undefined}>
   <SimMap />
 
   {#if !screenshotMode}
-    <!-- Sliding timeline panel -->
-    <div
-      class="timeline-drawer"
-      class:open={timelineOpen}
-    >
-      <TimelinePanel />
-    </div>
+    {#if timelineAvailable}
+      <!-- Sliding timeline panel -->
+      <div
+        class="timeline-drawer"
+        class:open={timelineOpen}
+      >
+        <TimelinePanel />
+      </div>
 
-    <!-- Toggle tab -->
-    <button
-      class="timeline-toggle"
-      class:open={timelineOpen}
-      style="left:{timelineOpen ? TIMELINE_WIDTH : 0}px"
-      onclick={() => (timelineOpen = !timelineOpen)}
-      title={timelineOpen ? $t("timeline.close") : $t("timeline.open")}
-    >
-      {timelineOpen ? "◂" : "▸"}
-    </button>
+      <!-- Toggle tab -->
+      <button
+        class="timeline-toggle"
+        class:open={timelineOpen}
+        style="left:{timelineOpen ? TIMELINE_WIDTH : 0}px"
+        onclick={() => (timelineOpen = !timelineOpen)}
+        title={timelineOpen ? $t("timeline.close") : $t("timeline.open")}
+      >
+        {timelineOpen ? "◂" : "▸"}
+      </button>
+    {/if}
 
     <ControlPanel />
 
