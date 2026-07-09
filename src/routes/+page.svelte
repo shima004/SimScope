@@ -82,10 +82,14 @@
       {timelineOpen ? "◂" : "▸"}
     </button>
 
-    <div class="left-col" style="left:{leftOffset + PANEL_GAP}px">
-      <ControlPanel />
+    <ControlPanel />
+
+    <div class="top-bar" style="left:{leftOffset + PANEL_GAP}px">
       <TeamNamePanel />
       <ScorePanel />
+    </div>
+
+    <div class="left-col" style="left:{leftOffset + PANEL_GAP}px">
       <ChannelFilterPanel />
     </div>
     <IdleAgentsPanel leftOffset={leftOffset + PANEL_GAP} />
@@ -196,12 +200,33 @@
 
   .left-col {
     position: absolute;
-    top: 12px;
+    top: 58px;
     display: flex;
     flex-direction: column;
     gap: 8px;
     z-index: 10;
     transition: left 0.25s ease;
+  }
+
+  .top-bar {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    z-index: 10;
+    transition: left 0.25s ease;
+  }
+
+  @media (max-width: 720px) {
+    .top-bar {
+      flex-wrap: wrap;
+    }
+
+    .left-col {
+      top: 96px;
+    }
   }
 
   .loading-overlay {

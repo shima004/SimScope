@@ -4,9 +4,12 @@
   import { CommandURN, EntityURN, entityColor, isAgent } from "$lib/rcrs/urns";
   import {
     agentActions,
+    currentStep,
     entities,
     focusPoint,
     inspectedId,
+    maxStep,
+    mode,
     perceivedEntities,
     perceptionViewMode,
     pinnedAgentId,
@@ -159,6 +162,10 @@
       injuredPerceived.length > 0,
   );
 
+  const hasPlaybackBar = $derived(
+    ($mode === "file" && $maxStep > 0) || ($mode === "ws" && $currentStep > 0),
+  );
+
   function focusOn(h: HumanEntity) {
     if (get(pinnedAgentId) !== null) {
       inspectedId.set(h.id);
@@ -172,7 +179,7 @@
 </script>
 
 {#if hasAny}
-  <div class="panel" class:dual={!!mergedCarried} class:collapsed>
+  <div class="panel" class:dual={!!mergedCarried} class:collapsed class:with-playback-bar={hasPlaybackBar}>
     <div
       class="panel-header"
       role="button"
@@ -500,12 +507,30 @@
     padding-bottom: 5px;
   }
 
+  .panel.with-playback-bar {
+    bottom: 82px;
+  }
+
   .panel.dual {
     width: 380px;
   }
 
   .panel.collapsed {
     padding-bottom: 0;
+  }
+
+  .panel.collapsed.with-playback-bar {
+    bottom: 78px;
+  }
+
+  @media (max-width: 760px) {
+    .panel.with-playback-bar {
+      bottom: 132px;
+    }
+
+    .panel.collapsed.with-playback-bar {
+      bottom: 112px;
+    }
   }
 
   .panel-header {

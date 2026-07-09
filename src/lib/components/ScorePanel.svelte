@@ -117,16 +117,17 @@
 <style>
   .panel {
     display: flex;
-    flex-direction: column;
-    gap: 3px;
+    align-items: center;
+    gap: 12px;
     background: rgba(13, 20, 30, 0.92);
     border: 1px solid rgba(0, 200, 255, 0.2);
     border-radius: 6px;
-    padding: 5px 12px;
+    padding: 6px 12px;
     line-height: 1.2;
     backdrop-filter: blur(6px);
     box-shadow: 0 0 20px rgba(0, 180, 255, 0.08);
     z-index: 10;
+    min-height: 40px;
   }
 
   .label {
@@ -149,22 +150,23 @@
   .row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    min-height: 18px;
+    gap: 7px;
+    min-height: 24px;
+    white-space: nowrap;
   }
 
   .divider {
-    height: 1px;
+    width: 1px;
+    align-self: stretch;
     background: rgba(0, 200, 255, 0.1);
-    margin: 2px 0;
+    margin: 0 1px;
   }
 
   .agent-counts {
     display: flex;
     gap: 10px;
-    justify-content: space-between;
-    min-height: 14px;
+    align-items: center;
+    min-height: 24px;
   }
 
   .agent-item {
@@ -179,5 +181,16 @@
     line-height: 15px;
     color: #607080;
     font-weight: 400;
+  }
+
+  @media (max-width: 720px) {
+    .panel {
+      flex-wrap: wrap;
+      gap: 6px 10px;
+    }
+
+    .divider {
+      display: none;
+    }
   }
 </style>

@@ -248,6 +248,7 @@
     }
   }
   let showConfig = $state(false);
+  let showConnection = $state(false);
   let openGroups = $state<Set<string>>(new Set());
   let inputsCollapsed = $state(false);
 
@@ -311,6 +312,11 @@
     }
   }
 
+  function toggleConnection() {
+    showConnection = !showConnection;
+    if (showConnection) inputsCollapsed = false;
+  }
+
   $effect(() => {
     // モードが変わったら自動再生を停止
     if ($mode !== "file") {
@@ -323,103 +329,171 @@
   });
 
   $effect(() => {
-    if ($errorMsg) inputsCollapsed = false;
+    if ($errorMsg) {
+      inputsCollapsed = false;
+      showConnection = true;
+    }
   });
 </script>
 
-<div class="ctrl-panel">
+{#if showConnection}
   <div
-    class="inputs-header"
-    role="button"
-    tabindex="0"
-    onclick={() => (inputsCollapsed = !inputsCollapsed)}
-    onkeydown={(e) => e.key === "Enter" && (inputsCollapsed = !inputsCollapsed)}
+    class="connection-backdrop"
+    role="presentation"
+    onclick={() => (showConnection = false)}
+    onkeydown={(e) => e.key === "Escape" && (showConnection = false)}
   >
-    <span class="section-label">{$t("control.connection")}</span>
-    <span class="collapse-arrow">{inputsCollapsed ? "▸" : "▾"}</span>
-  </div>
+    <div
+      class="ctrl-panel connection-modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <div class="popover-header">
+        <span class="section-label">{$t("control.connection")}</span>
+        <button
+          class="close-btn"
+          onclick={() => (showConnection = false)}
+          aria-label={$t("common.close")}>✕</button
+        >
+      </div>
 
-  {#if !inputsCollapsed}
-    <!-- WebSocket section -->
-    <section>
-      <span class="section-label">{$t("control.tcpServer")}</span>
-      <div class="row">
-        <input
-          class="url-input"
-          bind:value={tcpHost}
-          placeholder={$t("control.host")}
-          disabled={$mode === "ws"}
-        />
-        <input
-          class="port-input"
-          bind:value={tcpPort}
-          placeholder={$t("control.port")}
-          disabled={$mode === "ws"}
-        />
-        {#if $connected || $mode === "ws"}
-          <button class="btn danger" onclick={disconnectWS}>{$t("control.cut")}</button>
-        {:else}
-          <button
-            class="btn primary"
-            onclick={handleConnect}
-            disabled={$loading}>{$t("control.connect")}</button
-          >
+      {#if !inputsCollapsed}
+        <!-- WebSocket section -->
+        <section>
+          <span class="section-label">{$t("control.tcpServer")}</span>
+          <div class="row">
+            <input
+              class="url-input"
+              bind:value={tcpHost}
+              placeholder={$t("control.host")}
+              disabled={$mode === "ws"}
+            />
+            <input
+              class="port-input"
+              bind:value={tcpPort}
+              placeholder={$t("control.port")}
+              disabled={$mode === "ws"}
+            />
+            {#if $connected || $mode === "ws"}
+              <button class="btn danger" onclick={disconnectWS}>{$t("control.cut")}</button>
+            {:else}
+              <button
+                class="btn primary"
+                onclick={handleConnect}
+                disabled={$loading}>{$t("control.connect")}</button
+              >
+            {/if}
+          </div>
+          {#if $connected || $mode === "ws"}
+            <div
+              class="status"
+              class:online={$mode === "ws"}
+              class:offline={$mode !== "ws"}
+            >
+              {$mode === "ws" ? `● ${$t("control.connected")}` : `○ ${$t("control.connecting")}`}
+            </div>
+          {/if}
+        </section>
+
+        <div class="divider">{$t("control.or")}</div>
+
+        <!-- File section -->
+        <section>
+          <span class="section-label">{$t("control.logFile")}</span>
+          <div class="row">
+            <button
+              class="btn primary"
+              onclick={() => fileInput?.click()}
+              disabled={$loading}
+            >
+              {$loading ? $t("loading.loading") : $t("control.openLogFile")}
+            </button>
+            <input
+              bind:this={fileInput}
+              type="file"
+              accept=".7z,.tgz,.tar.gz,.xz,.lzma"
+              style="display:none"
+              onchange={handleFileChange}
+            />
+          </div>
+          <div class="row" style="margin-top: 8px;">
+            <input
+              class="url-input"
+              bind:value={logUrl}
+              placeholder="https://example.com/log.7z"
+              disabled={$loading}
+            />
+            <button
+              class="btn primary"
+              onclick={() => loadUrl(logUrl)}
+              disabled={$loading || !logUrl}>{$t("control.load")}</button
+            >
+          </div>
+        </section>
+
+        {#if $errorMsg}
+          <div class="error">{$errorMsg}</div>
         {/if}
-      </div>
-      {#if $connected || $mode === "ws"}
-        <div
-          class="status"
-          class:online={$mode === "ws"}
-          class:offline={$mode !== "ws"}
-        >
-          {$mode === "ws" ? `● ${$t("control.connected")}` : `○ ${$t("control.connecting")}`}
-        </div>
-      {/if}
-    </section>
-
-    <div class="divider">{$t("control.or")}</div>
-
-    <!-- File section -->
-    <section>
-      <span class="section-label">{$t("control.logFile")}</span>
-      <div class="row">
+      {:else}
         <button
           class="btn primary"
-          onclick={() => fileInput?.click()}
-          disabled={$loading}
+          onclick={() => (inputsCollapsed = false)}
         >
-          {$loading ? $t("loading.loading") : $t("control.openLogFile")}
+          {$t("control.connection")}
         </button>
-        <input
-          bind:this={fileInput}
-          type="file"
-          accept=".7z,.tgz,.tar.gz,.xz,.lzma"
-          style="display:none"
-          onchange={handleFileChange}
-        />
-      </div>
-      <div class="row" style="margin-top: 8px;">
-        <input
-          class="url-input"
-          bind:value={logUrl}
-          placeholder="https://example.com/log.7z"
-          disabled={$loading}
-        />
-        <button
-          class="btn primary"
-          onclick={() => loadUrl(logUrl)}
-          disabled={$loading || !logUrl}>{$t("control.load")}</button
+      {/if}
+
+      <div class="footer-row">
+        <a
+          class="github-link"
+          href="https://github.com/shima004/SimScope"
+          target="_blank"
+          rel="noopener noreferrer"
         >
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+            <path
+              d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+              0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+              -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+              .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+              -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+              .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+              .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+              0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+            />
+          </svg>
+          GitHub
+        </a>
+        <div class="lang-switch" aria-label={$t("common.language")}>
+          <button
+            class:active={$locale === "en"}
+            onclick={() => setLocale("en")}
+            aria-pressed={$locale === "en"}>{$t("language.en")}</button
+          >
+          <button
+            class:active={$locale === "ja"}
+            onclick={() => setLocale("ja")}
+            aria-pressed={$locale === "ja"}>{$t("language.ja")}</button
+          >
+        </div>
       </div>
-    </section>
+    </div>
+  </div>
+{/if}
 
-    {#if $errorMsg}
-      <div class="error">{$errorMsg}</div>
-    {/if}
-  {/if}
+{#if $mode === "file" && $maxStep > 0}
+  <div class="playback-bar">
+    <button
+      class="btn follow connection-trigger"
+      class:active={showConnection}
+      onclick={toggleConnection}
+    >
+      {$t("control.connection")}
+    </button>
 
-  <!-- Timeline (file mode) -->
-  {#if $mode === "file" && $maxStep > 0}
     <section class="timeline">
       <div class="timeline-header">
         <span class="section-label">{$t("control.step")}</span>
@@ -432,72 +506,57 @@
         value={$currentStep}
         oninput={handleSeek}
       />
-      <div class="playback-row">
-        <button
-          class="btn icon"
-          onclick={stepBack}
-          disabled={$currentStep <= 0}
-          aria-label={$t("control.stepBack")}>⏮</button
-        >
-        <button
-          class="btn icon play"
-          onclick={togglePlay}
-          aria-label={playing ? $t("control.pause") : $t("control.play")}
-        >
-          {playing ? "⏸" : "▶"}
-        </button>
-        <button
-          class="btn icon"
-          onclick={stepForward}
-          disabled={$currentStep >= $maxStep}
-          aria-label={$t("control.stepForward")}>⏭</button
-        >
-        <button
-          class="btn icon loop"
-          class:active={loopMode}
-          onclick={() => { loopMode = !loopMode; if (!loopMode) stopPlayback(); }}
-          title={loopMode ? $t("control.loopOff") : $t("control.loopOn")}
-          aria-label={$t("control.loop")}>🔁</button
-        >
-        <button
-          class="btn icon"
-          class:active={$agentDisplayMode === "emoji"}
-          onclick={() => agentDisplayMode.update((v) => (v === "emoji" ? "circle" : "emoji"))}
-          title={$agentDisplayMode === "emoji" ? $t("control.emojiMode") : $t("control.circleMode")}
-          aria-label={$t("control.agentDisplay")}>{$agentDisplayMode === "emoji" ? "🚒" : "⬤"}</button
-        >
-        <div class="speed-btns">
-          {#each SPEEDS as s}
-            <button
-              class="btn speed"
-              class:active={playSpeed === s}
-              onclick={() => setSpeed(s)}>{s}x</button
-            >
-          {/each}
-        </div>
-      </div>
       {#if loopCountdown !== null}
         <div class="loop-countdown">{$t("control.loopRestart", { seconds: loopCountdown })}</div>
       {/if}
     </section>
-  {/if}
 
-  <!-- Live step counter (WS mode) -->
-  {#if $mode === "ws" && $currentStep > 0}
-    {@const wsMaxStep = $kernelConfig["kernel.timesteps"]
-      ? Number($kernelConfig["kernel.timesteps"])
-      : null}
-    <section class="timeline">
-      <div class="timeline-header">
-        <span class="section-label">{$t("control.step")}</span>
-        <span class="step-counter"
-          >{$currentStep}{wsMaxStep ? ` / ${wsMaxStep}` : ""}</span
+    <div class="playback-row">
+      <button
+        class="btn icon"
+        onclick={stepBack}
+        disabled={$currentStep <= 0}
+        aria-label={$t("control.stepBack")}>⏮</button
+      >
+      <button
+        class="btn icon play"
+        onclick={togglePlay}
+        aria-label={playing ? $t("control.pause") : $t("control.play")}
+      >
+        {playing ? "⏸" : "▶"}
+      </button>
+      <button
+        class="btn icon"
+        onclick={stepForward}
+        disabled={$currentStep >= $maxStep}
+        aria-label={$t("control.stepForward")}>⏭</button
+      >
+      <button
+        class="btn icon loop"
+        class:active={loopMode}
+        onclick={() => { loopMode = !loopMode; if (!loopMode) stopPlayback(); }}
+        title={loopMode ? $t("control.loopOff") : $t("control.loopOn")}
+        aria-label={$t("control.loop")}>🔁</button
+      >
+      <button
+        class="btn icon"
+        class:active={$agentDisplayMode === "emoji"}
+        onclick={() => agentDisplayMode.update((v) => (v === "emoji" ? "circle" : "emoji"))}
+        title={$agentDisplayMode === "emoji" ? $t("control.emojiMode") : $t("control.circleMode")}
+        aria-label={$t("control.agentDisplay")}>{$agentDisplayMode === "emoji" ? "🚒" : "⬤"}</button
+      >
+    </div>
+
+    <div class="speed-btns" aria-label={$t("control.speed")}>
+      {#each SPEEDS as s}
+        <button
+          class="btn speed"
+          class:active={playSpeed === s}
+          onclick={() => setSpeed(s)}>{s}x</button
         >
-      </div>
-    </section>
-  {/if}
+      {/each}
+    </div>
 
-  {#if $mode !== "idle" && $maxStep > 0}
     <div class="btn-row">
       {#if Object.keys($kernelConfig).length > 0}
         <button
@@ -512,57 +571,66 @@
         onclick={() => followMode.update((v) => !v)}
         title={$t("control.followTitle")}>{$t("control.follow")}</button
       >
-
-      {#if $mode === "file"}
-        <button
-          class="btn follow"
-          class:active={$perceptionViewMode}
-          disabled={$pinnedAgentId === null &&
-            (!isAgent($selectedEntity?.urn ?? 0) ||
-              $selectedEntity?.urn === EntityURN.CIVILIAN) &&
-            !isCommandCenter($selectedEntity?.urn ?? 0)}
-          onclick={() => perceptionViewMode.update((v) => !v)}
-          title={$t("control.perceptionTitle")}>{$t("control.perception")}</button
-        >
-      {/if}
-    </div>
-  {/if}
-
-  <div class="footer-row">
-    <a
-      class="github-link"
-      href="https://github.com/shima004/SimScope"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
-        <path
-          d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
-          0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
-          -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
-          .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
-          -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
-          .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
-          .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
-          0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
-        />
-      </svg>
-      GitHub
-    </a>
-    <div class="lang-switch" aria-label={$t("common.language")}>
       <button
-        class:active={$locale === "en"}
-        onclick={() => setLocale("en")}
-        aria-pressed={$locale === "en"}>{$t("language.en")}</button
-      >
-      <button
-        class:active={$locale === "ja"}
-        onclick={() => setLocale("ja")}
-        aria-pressed={$locale === "ja"}>{$t("language.ja")}</button
+        class="btn follow"
+        class:active={$perceptionViewMode}
+        disabled={$pinnedAgentId === null &&
+          (!isAgent($selectedEntity?.urn ?? 0) ||
+            $selectedEntity?.urn === EntityURN.CIVILIAN) &&
+          !isCommandCenter($selectedEntity?.urn ?? 0)}
+        onclick={() => perceptionViewMode.update((v) => !v)}
+        title={$t("control.perceptionTitle")}>{$t("control.perception")}</button
       >
     </div>
   </div>
-</div>
+{:else if $mode === "ws" && $currentStep > 0}
+  {@const wsMaxStep = $kernelConfig["kernel.timesteps"]
+    ? Number($kernelConfig["kernel.timesteps"])
+    : null}
+  <div class="playback-bar compact">
+    <button
+      class="btn follow connection-trigger"
+      class:active={showConnection}
+      onclick={toggleConnection}
+    >
+      {$t("control.connection")}
+    </button>
+
+    <section class="timeline">
+      <div class="timeline-header">
+        <span class="section-label">{$t("control.step")}</span>
+        <span class="step-counter"
+          >{$currentStep}{wsMaxStep ? ` / ${wsMaxStep}` : ""}</span
+        >
+      </div>
+    </section>
+    <div class="btn-row">
+      {#if Object.keys($kernelConfig).length > 0}
+        <button
+          class="btn follow icon-btn"
+          onclick={() => (showConfig = true)}
+          title={$t("control.kernelConfig")}>⚙️</button
+        >
+      {/if}
+      <button
+        class="btn follow"
+        class:active={$followMode}
+        onclick={() => followMode.update((v) => !v)}
+        title={$t("control.followTitle")}>{$t("control.follow")}</button
+      >
+    </div>
+  </div>
+{:else}
+  <div class="playback-bar idle">
+    <button
+      class="btn follow connection-trigger"
+      class:active={showConnection}
+      onclick={toggleConnection}
+    >
+      {$t("control.connection")}
+    </button>
+  </div>
+{/if}
 
 <!-- Kernel config overlay -->
 {#if showConfig}
@@ -631,6 +699,36 @@
     line-height: 1.2;
   }
 
+  .connection-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(80, 88, 96, 0.38);
+    backdrop-filter: grayscale(0.35);
+  }
+
+  .connection-modal {
+    width: min(calc(100vw - 32px), 320px);
+    max-height: min(calc(100vh - 32px), 520px);
+    overflow-y: auto;
+  }
+
+  .popover-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 22px;
+  }
+
+  .popover-header .section-label {
+    flex: 1;
+    margin-bottom: 0;
+  }
+
   .lang-switch {
     display: flex;
     border: 1px solid rgba(0, 200, 255, 0.2);
@@ -658,30 +756,6 @@
   .lang-switch button.active {
     background: rgba(0, 200, 255, 0.16);
     color: #00c8ff;
-  }
-
-  .inputs-header {
-    display: flex;
-    align-items: center;
-    min-height: 19px;
-    padding: 3px 2px;
-    cursor: pointer;
-    user-select: none;
-    border-radius: 4px;
-  }
-  .inputs-header:hover {
-    background: rgba(255, 255, 255, 0.04);
-  }
-  .inputs-header .section-label {
-    flex: 1;
-    margin-bottom: 0;
-  }
-  .inputs-header .collapse-arrow {
-    font-size: 13px;
-    color: #607080;
-  }
-  .inputs-header:hover .collapse-arrow {
-    color: #c8d8e8;
   }
 
   .section-label {
@@ -758,6 +832,10 @@
     gap: 6px;
   }
 
+  .playback-bar .btn-row {
+    flex: 0 0 auto;
+  }
+
   .btn-row .btn {
     flex: 1;
   }
@@ -829,6 +907,53 @@
     gap: 6px;
   }
 
+  .playback-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    z-index: 30;
+    width: min(calc(100vw - 32px), 980px);
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: rgba(13, 20, 30, 0.94);
+    border: 1px solid rgba(0, 200, 255, 0.24);
+    border-radius: 6px;
+    color: #c8d8e8;
+    line-height: 1.2;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 26px rgba(0, 180, 255, 0.12);
+  }
+
+  .playback-bar.compact {
+    width: min(calc(100vw - 32px), 560px);
+  }
+
+  .playback-bar.idle {
+    width: auto;
+    min-height: 42px;
+  }
+
+  .playback-bar .timeline {
+    flex: 1 1 320px;
+    min-width: 180px;
+  }
+
+  .playback-bar .timeline-header {
+    min-height: 12px;
+  }
+
+  .playback-bar .section-label {
+    margin-bottom: 0;
+  }
+
+  .connection-trigger {
+    flex: 0 0 auto;
+  }
+
   .timeline-header {
     display: flex;
     justify-content: space-between;
@@ -853,12 +978,13 @@
     justify-content: center;
     gap: 6px;
     flex-wrap: wrap;
+    flex: 0 0 auto;
   }
 
   .speed-btns {
     display: flex;
     gap: 3px;
-    margin-left: 4px;
+    flex: 0 0 auto;
   }
 
   .btn.speed {
@@ -915,6 +1041,31 @@
   }
   .btn.icon.play:hover {
     background: rgba(0, 180, 255, 0.25);
+  }
+
+  @media (max-width: 760px) {
+    .playback-bar {
+      align-items: stretch;
+      flex-wrap: wrap;
+      bottom: 8px;
+      gap: 8px;
+    }
+
+    .playback-bar .timeline {
+      flex-basis: 100%;
+    }
+
+    .playback-row {
+      justify-content: flex-start;
+    }
+
+    .speed-btns {
+      margin-left: auto;
+    }
+
+    .playback-bar .btn-row {
+      flex: 1 1 100%;
+    }
   }
 
   .overlay-backdrop {
