@@ -336,12 +336,17 @@
   });
 </script>
 
-{#if showConnection}
+{#if $mode === "idle" || showConnection}
   <div
     class="connection-backdrop"
+    class:standalone={$mode === "idle"}
     role="presentation"
-    onclick={() => (showConnection = false)}
-    onkeydown={(e) => e.key === "Escape" && (showConnection = false)}
+    onclick={() => {
+      if ($mode !== "idle") showConnection = false;
+    }}
+    onkeydown={(e) => {
+      if ($mode !== "idle" && e.key === "Escape") showConnection = false;
+    }}
   >
     <div
       class="ctrl-panel connection-modal"
@@ -353,11 +358,13 @@
     >
       <div class="popover-header">
         <span class="section-label">{$t("control.connection")}</span>
-        <button
-          class="close-btn"
-          onclick={() => (showConnection = false)}
-          aria-label={$t("common.close")}>✕</button
-        >
+        {#if $mode !== "idle"}
+          <button
+            class="close-btn"
+            onclick={() => (showConnection = false)}
+            aria-label={$t("common.close")}>✕</button
+          >
+        {/if}
       </div>
 
       {#if !inputsCollapsed}
@@ -620,16 +627,6 @@
       >
     </div>
   </div>
-{:else}
-  <div class="playback-bar idle">
-    <button
-      class="btn follow connection-trigger"
-      class:active={showConnection}
-      onclick={toggleConnection}
-    >
-      {$t("control.connection")}
-    </button>
-  </div>
 {/if}
 
 <!-- Kernel config overlay -->
@@ -711,10 +708,21 @@
     backdrop-filter: grayscale(0.35);
   }
 
+  .connection-backdrop.standalone {
+    background: transparent;
+    backdrop-filter: none;
+    pointer-events: none;
+    z-index: 15;
+  }
+
   .connection-modal {
     width: min(calc(100vw - 32px), 320px);
     max-height: min(calc(100vh - 32px), 520px);
     overflow-y: auto;
+  }
+
+  .connection-backdrop.standalone .connection-modal {
+    pointer-events: auto;
   }
 
   .popover-header {
@@ -930,11 +938,6 @@
 
   .playback-bar.compact {
     width: min(calc(100vw - 32px), 560px);
-  }
-
-  .playback-bar.idle {
-    width: auto;
-    min-height: 42px;
   }
 
   .playback-bar .timeline {
