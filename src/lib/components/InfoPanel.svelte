@@ -150,6 +150,27 @@
         : [...openChannels, ch],
     );
   }
+
+  function trackPanelGroup(node: HTMLElement) {
+    const updateBottom = () => {
+      document.documentElement.style.setProperty(
+        "--info-panel-bottom",
+        `${node.getBoundingClientRect().bottom}px`,
+      );
+    };
+    const observer = new ResizeObserver(updateBottom);
+    observer.observe(node);
+    window.addEventListener("resize", updateBottom);
+    updateBottom();
+
+    return {
+      destroy() {
+        observer.disconnect();
+        window.removeEventListener("resize", updateBottom);
+        document.documentElement.style.removeProperty("--info-panel-bottom");
+      },
+    };
+  }
 </script>
 
 {#snippet entityProps(
@@ -437,7 +458,7 @@
 <!-- ── Layout ─────────────────────────────────────────────────────────────── -->
 
 {#if $selectedEntity || $pinnedAgentId}
-  <div class="panel-group">
+  <div class="panel-group" use:trackPanelGroup>
     <!-- 追加パネル（左側）— ピン止め中に別エンティティを参照中のみ -->
     {#if showDual && $inspectedEntity}
       {@const e = $inspectedEntity}
@@ -522,7 +543,7 @@
 
   .panel {
     width: 260px;
-    background: rgba(13, 20, 30, 0.92);
+    background: var(--panel-bg);
     border: 1px solid rgba(0, 200, 255, 0.2);
     border-radius: 6px;
     color: #c8d8e8;

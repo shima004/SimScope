@@ -157,7 +157,7 @@
     left: 0;
     width: 300px;
     height: 100%;
-    background: rgba(10, 16, 24, 0.96);
+    background: rgba(10, 16, 24, 0.64);
     border-right: 1px solid rgba(0, 200, 255, 0.18);
     backdrop-filter: blur(8px);
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);

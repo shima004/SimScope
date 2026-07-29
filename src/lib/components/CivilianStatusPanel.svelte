@@ -486,13 +486,17 @@
 
 <style>
   .panel {
+    --panel-bottom: 16px;
     position: absolute;
-    bottom: 16px;
+    bottom: var(--panel-bottom);
     right: 16px;
     width: 240px;
-    max-height: 340px;
+    max-height: min(
+      340px,
+      calc(100vh - var(--panel-bottom) - var(--info-panel-bottom, 0px) - 8px)
+    );
     overflow-y: auto;
-    background: rgba(13, 20, 30, 0.92);
+    background: var(--panel-bg);
     border: 1px solid rgba(0, 200, 255, 0.2);
     border-radius: 6px;
     color: #c8d8e8;
@@ -508,7 +512,7 @@
   }
 
   .panel.with-playback-bar {
-    bottom: 82px;
+    --panel-bottom: 82px;
   }
 
   .panel.dual {
@@ -520,16 +524,16 @@
   }
 
   .panel.collapsed.with-playback-bar {
-    bottom: 78px;
+    --panel-bottom: 78px;
   }
 
   @media (max-width: 760px) {
     .panel.with-playback-bar {
-      bottom: 132px;
+      --panel-bottom: 132px;
     }
 
     .panel.collapsed.with-playback-bar {
-      bottom: 112px;
+      --panel-bottom: 112px;
     }
   }
 

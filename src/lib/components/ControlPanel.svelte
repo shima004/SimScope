@@ -681,7 +681,7 @@
 <style>
   .ctrl-panel {
     width: 240px;
-    background: rgba(13, 20, 30, 0.92);
+    background: var(--panel-bg);
     border: 1px solid rgba(0, 200, 255, 0.2);
     border-radius: 6px;
     color: #c8d8e8;
@@ -719,6 +719,7 @@
     width: min(calc(100vw - 32px), 320px);
     max-height: min(calc(100vh - 32px), 520px);
     overflow-y: auto;
+    background: rgba(13, 20, 30, 0.92);
   }
 
   .connection-backdrop.standalone .connection-modal {
@@ -927,7 +928,7 @@
     align-items: center;
     gap: 12px;
     padding: 8px 12px;
-    background: rgba(13, 20, 30, 0.94);
+    background: var(--panel-bg);
     border: 1px solid rgba(0, 200, 255, 0.24);
     border-radius: 6px;
     color: #c8d8e8;
@@ -1082,7 +1083,7 @@
   }
 
   .overlay-panel {
-    background: rgba(13, 20, 30, 0.97);
+    background: var(--panel-bg-strong);
     border: 1px solid rgba(0, 200, 255, 0.25);
     border-radius: 8px;
     padding: 16px;

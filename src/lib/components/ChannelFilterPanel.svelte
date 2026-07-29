@@ -54,13 +54,12 @@
         {@const sizeLabel = ch.bandwidth
           ? (ch.bandwidth / 1000).toFixed(0) + " kbps"
           : "—"}
-        <div class="ch-row">
-          <button
-            class="ch-btn"
-            class:hidden
-            style="--c:{color}"
-            onclick={() => toggle(ch.index)}
-          >
+        <button
+          class="ch-row"
+          class:hidden
+          style="--c:{color}"
+          onclick={() => toggle(ch.index)}
+        >
             <span class="ch-icon"
               >{ch.type === "voice"
                 ? "🔊"
@@ -69,7 +68,6 @@
                   : "●"}</span
             >
             <span class="ch-label">ch.{ch.index}</span>
-          </button>
           <span
             class="ch-meta"
             style="color:color-mix(in srgb, {color} 55%, #607080)"
@@ -78,7 +76,7 @@
           <span class="ch-count" class:zero={!stats} style="color:{color}">
             {stats ? `${stats.count} msg · ${stats.bytes} B` : "—"}
           </span>
-        </div>
+        </button>
       {/each}
     </div>
   </div>
@@ -86,7 +84,7 @@
 
 <style>
   .panel {
-    background: rgba(13, 20, 30, 0.92);
+    background: var(--panel-bg);
     border: 1px solid rgba(0, 200, 255, 0.2);
     border-radius: 6px;
     padding: 5px 10px 6px;
@@ -107,36 +105,32 @@
 
   .ch-list {
     display: flex;
-    flex-direction: column;
-    gap: 3px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
   }
 
   .ch-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 21px;
-  }
-
-  .ch-btn {
     --c: #60c8ff;
     display: flex;
     align-items: center;
     gap: 4px;
-    min-height: 21px;
+    min-height: 19px;
     background: color-mix(in srgb, var(--c) 12%, transparent);
     border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
     border-radius: 4px;
-    padding: 2px 7px;
+    padding: 1px 5px;
+    color: inherit;
     cursor: pointer;
+    white-space: nowrap;
     transition:
       opacity 0.15s,
       background 0.15s;
   }
-  .ch-btn:hover {
+  .ch-row:hover {
     background: color-mix(in srgb, var(--c) 20%, transparent);
   }
-  .ch-btn.hidden {
+  .ch-row.hidden {
     opacity: 0.3;
     background: transparent;
   }
@@ -148,15 +142,15 @@
   }
 
   .ch-meta {
-    font-size: 10px;
-    line-height: 12px;
+    font-size: 9px;
+    line-height: 11px;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
   }
 
   .ch-count {
-    font-size: 10px;
-    line-height: 12px;
+    font-size: 9px;
+    line-height: 11px;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
   }

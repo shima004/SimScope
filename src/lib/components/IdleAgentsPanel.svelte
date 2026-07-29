@@ -9,6 +9,8 @@
     focusPoint,
     inspectedId,
     kernelConfig,
+    maxStep,
+    mode,
     pinnedAgentId,
     selectedId,
   } from "$lib/stores/simulation";
@@ -80,6 +82,9 @@
   });
 
   const hasAny = $derived(idleGroups.length > 0);
+  const hasPlaybackBar = $derived(
+    ($mode === "file" && $maxStep > 0) || ($mode === "ws" && $currentStep > 0),
+  );
 
   let collapsed = $state(false);
 
@@ -94,7 +99,12 @@
 </script>
 
 {#if hasAny}
-  <div class="panel" class:collapsed style="left:{leftOffset}px">
+  <div
+    class="panel"
+    class:collapsed
+    class:with-playback-bar={hasPlaybackBar}
+    style="left:{leftOffset}px"
+  >
     <div
       class="panel-header"
       role="button"
@@ -139,7 +149,7 @@
     width: 230px;
     max-height: 170px;
     overflow-y: auto;
-    background: rgba(13, 20, 30, 0.92);
+    background: var(--panel-bg);
     border: 1px solid rgba(0, 200, 255, 0.2);
     border-radius: 6px;
     color: #c8d8e8;
@@ -157,6 +167,16 @@
 
   .panel.collapsed {
     padding-bottom: 0;
+  }
+
+  .panel.with-playback-bar {
+    bottom: 82px;
+  }
+
+  @media (max-width: 760px) {
+    .panel.with-playback-bar {
+      bottom: 132px;
+    }
   }
 
   .panel-header {

@@ -119,7 +119,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    background: rgba(13, 20, 30, 0.92);
+    background: var(--panel-bg);
     border: 1px solid rgba(0, 200, 255, 0.2);
     border-radius: 6px;
     padding: 6px 12px;

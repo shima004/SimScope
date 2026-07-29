@@ -15,7 +15,7 @@
 
 <style>
   .panel {
-    background: rgba(13, 17, 23, 0.85);
+    background: var(--panel-bg);
     border: 1px solid #30363d;
     border-radius: 6px;
     padding: 6px 12px;
@@ -25,6 +25,7 @@
     box-sizing: border-box;
     word-break: break-word;
     overflow-wrap: break-word;
+    backdrop-filter: blur(6px);
   }
 
   .team {
