@@ -69,7 +69,7 @@
     if (base) return [...base, 240] as [number, number, number, number];
 
     // Regular building: brokenness が 1 以上で茶色
-    return e.brokenness > 0 ? [180, 120, 60, 220] : [80, 100, 140, 220];
+    return e.brokenness > 0 ? [112, 92, 76, 185] : [80, 100, 140, 220];
   }
 
   const AGENT_EMOJI: Record<number, string> = {
